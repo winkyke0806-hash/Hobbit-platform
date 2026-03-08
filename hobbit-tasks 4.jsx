@@ -324,7 +324,7 @@ function FillBlankTask({task,onDone}){
   const [si,setSi]=useState(0);const [score,setScore]=useState(0);const [fb,setFb]=useState(null);const [done,setDone]=useState(false);
   const {left,pct}=useTimer(task.timeLimit,()=>setDone(true));
   const perS=Math.round(task.basePoints/sentences.length);
-  const pick=(o)=>{if(fb)return;const s=sentences[si];const good=o===s.word;if(good)setScore(sc=>sc+perS+Math.round(left/task.timeLimit*20));setFb({good,text:good?"Pontosan illik a mondatba!"`:`A helyes szó: „${s.word}"`});};
+  const pick=(o)=>{if(fb)return;const s=sentences[si];const good=o===s.word;if(good)setScore(sc=>sc+perS+Math.round(left/task.timeLimit*20));setFb({good,text:good?`Pontosan illik a mondatba!`:`A helyes szó: „${s.word}"`});};
   const next=()=>{setFb(null);if(si+1>=sentences.length)setDone(true);else setSi(s=>s+1);};
   if(done)return <TaskResult task={task} score={score} maxScore={task.basePoints+sentences.length*20} onBack={()=>onDone(score)}/>;
   const s=sentences[si];
