@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import AuthApp from "../hobbit-app.jsx";
-import HobbitApp from "../hobbit-tasks.jsx";
+import AuthApp from "../hobbit-app 2.jsx";
+import HobbitApp from "../hobbit-tasks 4.jsx";
 
 function Root() {
   const [loggedIn, setLoggedIn] = React.useState(() => {
