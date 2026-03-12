@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import ProfileTab from "../hobbit-profile.jsx";
+import ProfileTab from "./hobbit-profile.jsx";
 
 // ── CONSTANTS ──────────────────────────────────────────────────────────────────
 const RACES = [
