@@ -94,8 +94,8 @@ const TASKS=[
    data:{words:[
      {letters:["O","R","I","N","H","T"],answer:"THORIN",hint:"A büszke vezér"},
      {letters:["I","N","L","A","B"],    answer:"BALIN", hint:"A bölcs, ősz hajú törpe"},
-     {letters:["I","L","F"],           answer:"FILI",  hint:"Thorin fiatalabb unokaöccse"},
-     {letters:["I","L","K"],           answer:"KILI",  hint:"Az íjász testvér"},
+     {letters:["I","I","L","F"],           answer:"FILI",  hint:"Thorin fiatalabb unokaöccse"},
+     {letters:["I","I","L","K"],           answer:"KILI",  hint:"Az íjász testvér"},
      {letters:["I","F","G","L","N"],   answer:"GLOIN", hint:"Gimli apja"},
    ]}},
   {id:9,num:"IX", type:"truefalse",title:"Smaug Titkai",         subtitle:"Igaz vagy hamis a sárkányról?",  location:"Smaug barlangja",icon:"🔥",mx:88,my:40,color:"#B03020",glow:"rgba(176,48,32,0.5)",  timeLimit:70, basePoints:100,
@@ -153,7 +153,7 @@ const TASKS=[
    story:"Thorin társai éneke betöltötte Zsákos-dom-bot. De ki volt ki köztük? Fejtsd meg a neveket!",
    raceStory:{hobbit:"Mind a tizenkét törpe eljött az estére. Te emlékszel mindegyikükre?",dwarf:"A saját testvéreid, rokonaid! Ne feledd a nevüket!",elf:"Mi nem kedveltük a törpéket mindig — de nevüket ismerjük.",human:"A törpe nevek idegenek — de a bátorság megismeri az összes szövetségest.",wizard:"Gandalf meghívta mindet. Nekem mind ismerős — de neked?"},
    data:{words:[
-     {letters:["F","I","N","U","B"], answer:"BIFUR",  hint:"Az egyik Zs-netes rokon"},
+     {letters:["F","I","R","U","B"], answer:"BIFUR",  hint:"Az egyik Zs-netes rokon"},
      {letters:["F","U","R","B","O"], answer:"BOFUR",  hint:"A vidám, hegedűs törpe"},
      {letters:["B","O","M","B","U","R"], answer:"BOMBUR", hint:"A legkövérebb, álmos törpe"},
      {letters:["R","O","I","D"],     answer:"DORI",   hint:"Az erős, kicsit zsörtölődős"},
