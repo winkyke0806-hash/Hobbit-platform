@@ -726,14 +726,6 @@ function MiniGamesTab(){
   </div>;
 }
 
-// ── PROFILE TAB (placeholder) ──────────────────────────────────────────────────
-function ProfileTab(){
-  return <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16,opacity:.4}}>
-    <span style={{fontSize:"3rem"}}>👤</span>
-    <div style={{fontFamily:"'Cinzel',serif",fontSize:".85rem",color:"var(--gm)",letterSpacing:".15em",textTransform:"uppercase"}}>Profil — Hamarosan</div>
-  </div>;
-}
-
 // ── BOARD GAME TAB ─────────────────────────────────────────────────────────────
 function BoardGameTab(){
   return <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:20,padding:24,textAlign:"center"}}>
