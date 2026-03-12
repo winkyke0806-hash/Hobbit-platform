@@ -96,7 +96,7 @@ const TASKS=[
      {letters:["I","N","L","A","B"],    answer:"BALIN", hint:"A bölcs, ősz hajú törpe"},
      {letters:["I","I","L","F"],           answer:"FILI",  hint:"Thorin fiatalabb unokaöccse"},
      {letters:["I","I","L","K"],           answer:"KILI",  hint:"Az íjász testvér"},
-     {letters:["I","F","G","L","N"],   answer:"GLOIN", hint:"Gimli apja"},
+     {letters:["I","O","G","L","N"],   answer:"GLOIN", hint:"Gimli apja"},
    ]}},
   {id:9,num:"IX", type:"truefalse",title:"Smaug Titkai",         subtitle:"Igaz vagy hamis a sárkányról?",  location:"Smaug barlangja",icon:"🔥",mx:88,my:40,color:"#B03020",glow:"rgba(176,48,32,0.5)",  timeLimit:70, basePoints:100,
    story:"Smaug barlangja forró arannyal van tele. De az igazságok és legendák is izzanak itt...",
