@@ -30,7 +30,7 @@ const TASKS=[
    data:{statements:[
      {s:"Gandalf varázsló volt, mielőtt Középföldére jött.",         ok:true,  exp:"Gandalf Maia — isteni lény, akit Középföldére küldtek."},
      {s:"Bilbo soha nem talált Gyűrűt az útja során.",               ok:false, exp:"Bilbo megtalálta Az Egy Gyűrűt Gollam barlangjában!"},
-     {s:"Thorin Tölgypajzs Erebor jogos örökös törpe királya volt.",       ok:true,  exp:"Thorin Oakenshield valóban a jogos örökös és király volt — Smaug elűzte, de ez nem változtat ezen."},
+     {s:"Tölgypajzsos Thorin Erebor jogos örökös törpe királya volt.",       ok:true,  exp:"Thorin Oakenshield valóban a jogos örökös és király volt — Smaug elűzte, de ez nem változtat ezen."},
      {s:"A trollok napfényre érve kővé válnak.",                     ok:true,  exp:"Bert, Tom és William is így járt hajnalban."},
      {s:"Smaug a Magányos Hegyet legyőzte csatában.",               ok:false, exp:"Smaug éjjel, lopva támadta meg Erebort."},
      {s:"Gollam a gyűrűt évszázadokon át rejtegette.",          ok:true,  exp:"Kb. 500 évig őrizte a föld alatt — ő maga sem tudta, hogy Ez Az Egy Gyűrű."},
