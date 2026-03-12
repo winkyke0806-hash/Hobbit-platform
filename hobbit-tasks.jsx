@@ -545,7 +545,7 @@ function TaskModal({task,user,onClose,onComplete}){
 function AdventureMap({user,completed,scores,onSelect}){
   const race=RACES.find(r=>r.id===user?.race)||RACES[3];
   const [hov,setHov]=useState(null);
-  const totalScore=Object.values(scores).reduce((a,b)=>a+b,0);
+  const totalScore = Object.values(scores || {}).reduce((a,b)=>a+b,0);
   return <div style={{flex:1,position:"relative",overflow:"hidden",minHeight:0}}>
     <div style={{position:"absolute",inset:0,background:"radial-gradient(ellipse at 30% 40%,rgba(107,140,62,.04) 0%,transparent 50%),radial-gradient(ellipse at 70% 60%,rgba(160,82,45,.04) 0%,transparent 50%)"}}/>
     <svg style={{position:"absolute",inset:0,width:"100%",height:"100%",zIndex:2}} viewBox="0 0 100 100" preserveAspectRatio="none">
@@ -750,12 +750,11 @@ export default function HobbitApp(){
   const [activeTask,setActiveTask]=useState(null);
   const [tab,setTab]=useState("map");
   const race=RACES.find(r=>r.id===user?.race)||RACES[3];
-  const totalScore=Object.values(scores).reduce((a,b)=>a+b,0);
+  const totalScore = Object.values(scores || {}).reduce((a,b)=>a+b,0);;
 
   const handleComplete=useCallback((taskId,score)=>{
     setCompleted(c=>{const next=c.includes(taskId)?c:[...c,taskId];const cu=JSON.parse(localStorage.getItem("hobbit_current")||"{}");cu.completedTasks=next;localStorage.setItem("hobbit_current",JSON.stringify(cu));return next;});
-    setScores(s=>{const next={...s,[taskId]:Math.max(s[taskId]||0,score)};localStorage.setItem("hobbit_task_scores",JSON.stringify(next));const cu=JSON.parse(localStorage.getItem("hobbit_current")||"{}");cu.score=Object.values(next).reduce((a,b)=>a+b,0);localStorage.setItem("hobbit_current",JSON.stringify(cu));return next;});
-  },[]);
+    setScores(s=>{const next={...s,[taskId]:Math.max(s[taskId]||0,score)};localStorage.setItem("hobbit_task_scores",JSON.stringify(next));const cu=JSON.parse(localStorage.getItem("hobbit_current")||"{}");cu.score = Object.values(next || {}).reduce((a,b)=>a+b,0);
 
   const TABS=[{id:"map",icon:"🗺️",label:"Térkép"},{id:"games",icon:"🎮",label:"Minijátékok"},{id:"profile",icon:"👤",label:"Profil"},{id:"board",icon:"🎲",label:"Társasjáték"}];
 
