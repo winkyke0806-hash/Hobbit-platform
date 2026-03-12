@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import AuthApp from "../hobbit-app.jsx";
 import HobbitApp from "../hobbit-tasks.jsx";
+import ProfileTab from "./hobbit-profile.jsx"
 
 function Root() {
   const isLoggedIn = () => {
