@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import BoardGame from "./hobbit-game.jsx";
 
 // ── CONSTANTS ──────────────────────────────────────────────────────────────────
 const RACES = [
@@ -936,18 +937,8 @@ function ProfileTab({user,completed,scores}){
 }
 
 // ── BOARD GAME TAB ─────────────────────────────────────────────────────────────
-function BoardGameTab(){
-  return <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:20,padding:24,textAlign:"center"}}>
-    <div style={{fontSize:"3.5rem",animation:"emFl 4s ease-in-out infinite"}}>🎲</div>
-    <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"clamp(1.1rem,3.5vw,1.6rem)",color:"var(--gold)",textShadow:"0 0 24px rgba(201,168,76,.35)"}}>Online Társasjáték</div>
-    <div style={{fontFamily:"'Cinzel',serif",fontSize:".78rem",letterSpacing:".2em",color:"var(--gm)",textTransform:"uppercase"}}>— Hamarosan —</div>
-    <div style={{fontStyle:"italic",color:"var(--td)",fontSize:".94rem",lineHeight:1.75,maxWidth:380,padding:"14px 18px",border:"1px solid rgba(201,168,76,.12)",background:"rgba(201,168,76,.02)"}}>
-      2–4 játékos valós idejű csata Középföldén. Kérdéses párbajok, Középföldé-térkép alapú tábla, chat és hívás. Az erők gyülekeznek...
-    </div>
-    <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"center"}}>
-      {["Multiplayer","Valós idejű","Rang rendszer","Chat"].map(t=><span key={t} style={{padding:"3px 10px",border:"1px solid rgba(201,168,76,.18)",color:"var(--gm)",fontFamily:"'Cinzel',serif",fontSize:".62rem",letterSpacing:".08em"}}>{t}</span>)}
-    </div>
-  </div>;
+function BoardGameTab({user}){
+  return <BoardGame user={user}/>;
 }
 
 // ── MAIN APP ───────────────────────────────────────────────────────────────────
@@ -996,7 +987,7 @@ export default function HobbitApp(){
           {tab==="map"    &&<AdventureMap user={user} completed={completed} scores={scores} onSelect={setActiveTask}/>}
           {tab==="games"  &&<MiniGamesTab/>}
           {tab==="profile"&&<ProfileTab user={user} completed={completed} scores={scores}/>}
-          {tab==="board"  &&<BoardGameTab/>}
+          {tab==="board"  &&<BoardGameTab user={user}/>}
         </div>
 
         {/* Bottom tab bar */}
