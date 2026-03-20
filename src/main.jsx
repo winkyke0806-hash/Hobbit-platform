@@ -10,7 +10,7 @@ function Root() {
   const [loggedIn, setLoggedIn] = React.useState(isLoggedIn);
   return loggedIn
     ? <HobbitApp />
-    : <AuthApp onLogin={() => { setLoggedIn(true); }} />;
+    : <AuthApp onLogin={() (2)=> { setLoggedIn(true); }} />;
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<Root />);
