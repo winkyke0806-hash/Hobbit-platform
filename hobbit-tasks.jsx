@@ -269,7 +269,18 @@ function StoryIntro({task,user,onStart}){
     <div style={{opacity:p>=2?1:0,transition:"all .8s ease .6s",display:"flex",flexDirection:"column",alignItems:"center",gap:7}}>
       {task.timeLimit>0&&<div style={{fontFamily:"'Cinzel',serif",fontSize:".65rem",color:"var(--gm)",letterSpacing:".12em"}}>⏳ {task.timeLimit} MÁSODPERC &nbsp;·&nbsp; 🏆 MAX {task.basePoints} PONT</div>}
       {!task.timeLimit&&<div style={{fontFamily:"'Cinzel',serif",fontSize:".65rem",color:"var(--gm)",letterSpacing:".12em"}}>🔮 JÓSLAT-KALAND &nbsp;·&nbsp; 🏆 MAX {task.basePoints} PONT</div>}
-      <button className="btn-start" onClick={onStart} style={{"--tc":task.color}}><span>ᚠ</span>Kaland Kezdete<span>ᚠ</span></button>
+      <button
+    className="btn-start"
+    onClick={() => {
+        onStart(); // eredeti indító logika
+        setTimeout(() => {
+            window.location.reload(); // HARD RELOAD
+        }, 200);
+    }}
+    style={{ "--tc": task.color }}
+>
+    <span>ᚠ</span>Kaland Kezdete<span>ᚠ</span>
+</button>
     </div>
   </div>;
 }
