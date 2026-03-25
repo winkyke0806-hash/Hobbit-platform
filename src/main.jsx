@@ -5,12 +5,19 @@ import HobbitApp from "../hobbit-tasks.jsx";
 
 function Root() {
   const isLoggedIn = () => {
-    try { const u = JSON.parse(localStorage.getItem("hobbit_current")); return !!u?.adventureName; } catch { return false; }
+    try {
+      const u = JSON.parse(localStorage.getItem("hobbit_current"));
+      return !!u?.adventureName;
+    } catch {
+      return false;
+    }
   };
+
   const [loggedIn, setLoggedIn] = React.useState(isLoggedIn);
+
   return loggedIn
     ? <HobbitApp />
-    : <AuthApp onLogin={() (2)=> { setLoggedIn(true); }} />;
+    : <AuthApp onLogin={() => { setLoggedIn(true); }} />;
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<Root />);
