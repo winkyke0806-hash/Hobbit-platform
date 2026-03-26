@@ -180,13 +180,20 @@ const TASKS=[
 ];
 
 // ── MAP PATHS ──────────────────────────────────────────────────────────────────
-const MAP_PATHS=[
-  "M 14 54 Q 18 48 22 42","M 22 42 Q 27 35 33 28","M 33 28 Q 43 31 50 20",
-  "M 50 20 Q 66 25 66 30","M 66 30 Q 74 26 82 22","M 82 22 Q 85 31 88 40",
-  "M 88 40 Q 81 46 74 52","M 74 52 Q 73 58 72 52","M 58 36 Q 65 44 74 52",
-  "M 22 42 Q 26 55 30 68","M 30 68 Q 40 72 48 82","M 48 82 Q 55 79 62 76",
-  "M 62 76 Q 54 70 50 20","M 14 54 Q 17 65 20 76","M 20 76 Q 34 80 48 82",
+// ── REGIONS ───────────────────────────────────────────────────────────────────
+const REGIONS=[
+  {id:"shire",name:"Zsákos-domb",color:"#6B8C3E",glow:"rgba(107,140,62,0.4)",icon:"🏡",tasks:[1,2,3],nodes:[{x:10,y:62},{x:18,y:72},{x:12,y:80}],label:{x:15,y:53},terrain:"hills"},
+  {id:"rivendell",name:"Völgyzugoly",color:"#3A7A8B",glow:"rgba(58,122,139,0.4)",icon:"🏰",tasks:[4,5,6],nodes:[{x:28,y:32},{x:36,y:40},{x:30,y:48}],label:{x:32,y:24},terrain:"valley"},
+  {id:"mirkwood",name:"Bakacsinerdő",color:"#5A7A2E",glow:"rgba(90,122,46,0.4)",icon:"🌲",tasks:[7,8,9],nodes:[{x:50,y:52},{x:56,y:60},{x:52,y:68}],label:{x:53,y:44},terrain:"forest"},
+  {id:"mountains",name:"Ködös Hegyek",color:"#8B7355",glow:"rgba(139,115,85,0.4)",icon:"⛰️",tasks:[10,11,12],nodes:[{x:70,y:24},{x:77,y:32},{x:73,y:40}],label:{x:74,y:16},terrain:"mountains"},
+  {id:"erebor",name:"Magányos Hegy",color:"#A0522D",glow:"rgba(160,82,45,0.4)",icon:"🏔️",tasks:[13,14,15],nodes:[{x:86,y:42},{x:92,y:52},{x:88,y:60}],label:{x:89,y:34},terrain:"mountain"},
 ];
+function isRegionUnlocked(regionIdx,completed){
+  if(regionIdx===0)return true;
+  const prev=REGIONS[regionIdx-1];
+  const doneCount=prev.tasks.filter(t=>completed.includes(t)).length;
+  return doneCount>=2;
+}
 
 // ── SHARED UI ──────────────────────────────────────────────────────────────────
 function FloatingStones({count=14}){
@@ -218,6 +225,21 @@ function TimerBar({left,pct,limit}){
   </div>;
 }
 
+function RadialTimer({total,left,size=56}){
+  if(!total)return null;
+  const pct=left/total;
+  const c=pct>.6?"#C9A84C":pct>.3?"#F57F17":"#E53935";
+  const r=(size-6)/2;const circ=2*Math.PI*r;const offset=circ*(1-pct);
+  return <div role="timer" aria-label={`Hátralévő idő: ${left} másodperc`} style={{position:"relative",width:size,height:size,flexShrink:0}}>
+    <svg width={size} height={size} style={{transform:"rotate(-90deg)"}}>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(255,255,255,.06)" strokeWidth="3"/>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={c} strokeWidth="3" strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" style={{transition:"stroke-dashoffset 1s linear,stroke .3s"}}/>
+    </svg>
+    <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Cinzel',serif",fontSize:size>50?".75rem":".6rem",color:c,fontWeight:600}}>{left}</div>
+    {pct<.3&&left>0&&<div style={{position:"absolute",inset:-2,borderRadius:"50%",border:`1px solid ${c}`,opacity:.4,animation:"nodePulse 1.5s ease-in-out infinite"}}/>}
+  </div>;
+}
+
 function Feedback({good,text,onNext}){
   return <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:good?"rgba(8,24,8,.96)":"rgba(24,8,8,.96)",zIndex:20,animation:"fadeIn .3s ease",gap:18,padding:24,textAlign:"center"}}>
     <div style={{fontSize:"3.5rem",animation:"popIn .4s cubic-bezier(.34,1.56,.64,1)"}}>{good?"✨":"💀"}</div>
@@ -227,17 +249,20 @@ function Feedback({good,text,onNext}){
   </div>;
 }
 
-function TaskResult({task,score,maxScore,onBack}){
+function TaskResult({task,score,maxScore,onBack,onRetry,stats}){
   const pct=Math.round((score/maxScore)*100);
   const tier=pct>=80?"🏆 Mester":pct>=60?"⚔️ Hős":pct>=40?"🛡️ Vitéz":"📜 Tanuló";
   const [p,setP]=useState(0);
+  const [displayScore,setDisplayScore]=useState(0);
   useEffect(()=>{const t=[setTimeout(()=>setP(1),200),setTimeout(()=>setP(2),900),setTimeout(()=>setP(3),1600)];return()=>t.forEach(clearTimeout)},[]);
-  return <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"28px 20px",textAlign:"center",gap:18}}>
-    <div style={{opacity:p>=1?1:0,transition:"all .8s ease",fontSize:"3rem"}}>{task.icon}</div>
+  // Animated count-up
+  useEffect(()=>{if(p<2)return;let start=0;const dur=1200;const t0=performance.now();const step=(now)=>{const elapsed=now-t0;const progress=Math.min(elapsed/dur,1);const eased=1-Math.pow(1-progress,3);const val=Math.round(eased*score);setDisplayScore(val);if(progress<1)requestAnimationFrame(step);};requestAnimationFrame(step);},[p>=2,score]);
+  return <div role="status" aria-label={`Eredmény: ${score} pont a ${maxScore}-ból`} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"28px 20px",textAlign:"center",gap:18}}>
+    <div style={{opacity:p>=1?1:0,transition:"all .8s ease",fontSize:"3rem",filter:`drop-shadow(0 0 14px ${task.glow})`}}>{task.icon}</div>
     <div style={{opacity:p>=2?1:0,transition:"all .8s ease .2s"}}>
       <div style={{fontFamily:"'Cinzel',serif",fontSize:".68rem",letterSpacing:".25em",color:"var(--gm)",textTransform:"uppercase",marginBottom:6}}>— Feladat Befejezve —</div>
-      <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"clamp(1.4rem,5vw,2.3rem)",color:"var(--gold)"}}>{score}<span style={{fontSize:".5em",opacity:.6}}> / {maxScore}</span></div>
-      <div style={{fontFamily:"'Cinzel',serif",fontSize:".82rem",color:"var(--gold)",letterSpacing:".1em",marginTop:4}}>{tier}</div>
+      <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"clamp(1.4rem,5vw,2.3rem)",color:"var(--gold)",textShadow:"0 0 18px rgba(201,168,76,.3)"}}>{displayScore}<span style={{fontSize:".5em",opacity:.6}}> / {maxScore}</span></div>
+      <div style={{fontFamily:"'Cinzel',serif",fontSize:".82rem",color:"var(--gold)",letterSpacing:".1em",marginTop:4,animation:p>=2?"popIn .5s cubic-bezier(.34,1.56,.64,1) 1s both":"none"}}>{tier}</div>
     </div>
     <div style={{opacity:p>=2?1:0,transition:"all .8s .3s",width:"100%",maxWidth:340}}>
       <div style={{height:7,background:"rgba(255,255,255,.05)",borderRadius:3,overflow:"hidden",border:"1px solid rgba(201,168,76,.1)"}}>
@@ -245,7 +270,13 @@ function TaskResult({task,score,maxScore,onBack}){
       </div>
       <div style={{fontFamily:"'Cinzel',serif",fontSize:".63rem",color:"var(--gm)",letterSpacing:".1em",marginTop:5}}>{pct}% pontosság</div>
     </div>
-    <div style={{opacity:p>=3?1:0,transition:"all .8s .4s"}}>
+    {stats&&<div style={{opacity:p>=3?1:0,transition:"all .8s .2s",fontFamily:"'Cinzel',serif",fontSize:".68rem",color:"var(--gm)",letterSpacing:".06em",display:"flex",gap:14,flexWrap:"wrap",justifyContent:"center"}}>
+      {stats.correct!=null&&<span>Helyes: <span style={{color:"#66BB6A"}}>{stats.correct}</span></span>}
+      {stats.wrong!=null&&<span>· Helytelen: <span style={{color:"#E53935"}}>{stats.wrong}</span></span>}
+      {stats.timeUsed!=null&&<span>· Idő: <span style={{color:"var(--gold)"}}>{stats.timeUsed}s</span></span>}
+    </div>}
+    <div style={{opacity:p>=3?1:0,transition:"all .8s .4s",display:"flex",gap:10,flexWrap:"wrap",justifyContent:"center"}}>
+      {onRetry&&score<maxScore&&<button onClick={onRetry} style={{padding:"9px 20px",background:"rgba(201,168,76,.08)",border:`1px solid ${task.color}`,color:task.color,fontFamily:"'Cinzel',serif",fontSize:".7rem",letterSpacing:".1em",cursor:"pointer",transition:"all .18s"}}>↻ Újra Próbálom</button>}
       <button className="btn-back-map" onClick={onBack}>← Vissza a Térképre</button>
     </div>
   </div>;
@@ -283,14 +314,14 @@ function StoryIntro({task,user,onStart}){
 }
 
 // ── TASK TYPES ─────────────────────────────────────────────────────────────────
-function QuizTask({task,onDone}){
+function QuizTask({task,onDone,onRetry}){
   const {questions}=task.data;
-  const [qi,setQi]=useState(0);const [sel,setSel]=useState(null);const [score,setScore]=useState(0);const [fb,setFb]=useState(null);const [done,setDone]=useState(false);
+  const [qi,setQi]=useState(0);const [sel,setSel]=useState(null);const [score,setScore]=useState(0);const [fb,setFb]=useState(null);const [done,setDone]=useState(false);const [correct,setCorrect]=useState(0);
   const {left,pct}=useTimer(task.timeLimit,()=>setDone(true));
   const perQ=Math.round(task.basePoints/questions.length);
-  const pick=(i)=>{if(sel!==null||fb)return;const q=questions[qi];const good=i===q.ok;setSel(i);if(good)setScore(s=>s+perQ+Math.round(left/task.timeLimit*18));setFb({good,text:good?`Kiváló! ${q.hint||""}`:`Helyes válasz: „${q.opts[q.ok]}". ${q.hint||""}`});};
+  const pick=(i)=>{if(sel!==null||fb)return;const q=questions[qi];const good=i===q.ok;setSel(i);if(good){setScore(s=>s+perQ+Math.round(left/task.timeLimit*18));setCorrect(c=>c+1);}setFb({good,text:good?`Kiváló! ${q.hint||""}`:`Helyes válasz: „${q.opts[q.ok]}". ${q.hint||""}`});};
   const nextQ=()=>{setSel(null);setFb(null);if(qi+1>=questions.length)setDone(true);else setQi(q=>q+1);};
-  if(done)return <TaskResult task={task} score={score} maxScore={task.basePoints+questions.length*18} onBack={()=>onDone(score)}/>;
+  if(done)return <TaskResult task={task} score={score} maxScore={task.basePoints+questions.length*18} onBack={()=>onDone(score)} onRetry={onRetry} stats={{correct,wrong:questions.length-correct,timeUsed:task.timeLimit?task.timeLimit-left:null}}/>;
   const q=questions[qi];
   return <div style={{flex:1,display:"flex",flexDirection:"column",position:"relative",overflow:"hidden"}}>
     <TimerBar left={left} pct={pct} limit={task.timeLimit}/>
@@ -305,14 +336,14 @@ function QuizTask({task,onDone}){
   </div>;
 }
 
-function TrueFalseTask({task,onDone}){
+function TrueFalseTask({task,onDone,onRetry}){
   const {statements}=task.data;
-  const [si,setSi]=useState(0);const [score,setScore]=useState(0);const [fb,setFb]=useState(null);const [done,setDone]=useState(false);
+  const [si,setSi]=useState(0);const [score,setScore]=useState(0);const [fb,setFb]=useState(null);const [done,setDone]=useState(false);const [correct,setCorrect]=useState(0);
   const {left,pct}=useTimer(task.timeLimit,()=>setDone(true));
   const perS=Math.round(task.basePoints/statements.length);
-  const pick=(v)=>{if(fb)return;const s=statements[si];const good=v===s.ok;if(good)setScore(sc=>sc+perS+Math.round(left/task.timeLimit*16));setFb({good,text:good?`Pontosan! ${s.exp}`:`Tévedtél. ${s.exp}`});};
+  const pick=(v)=>{if(fb)return;const s=statements[si];const good=v===s.ok;if(good){setScore(sc=>sc+perS+Math.round(left/task.timeLimit*16));setCorrect(c=>c+1);}setFb({good,text:good?`Pontosan! ${s.exp}`:`Tévedtél. ${s.exp}`});};
   const next=()=>{setFb(null);if(si+1>=statements.length)setDone(true);else setSi(s=>s+1);};
-  if(done)return <TaskResult task={task} score={score} maxScore={task.basePoints+statements.length*16} onBack={()=>onDone(score)}/>;
+  if(done)return <TaskResult task={task} score={score} maxScore={task.basePoints+statements.length*16} onBack={()=>onDone(score)} onRetry={onRetry} stats={{correct,wrong:statements.length-correct,timeUsed:task.timeLimit?task.timeLimit-left:null}}/>;
   const s=statements[si];
   return <div style={{flex:1,display:"flex",flexDirection:"column",position:"relative",overflow:"hidden"}}>
     <TimerBar left={left} pct={pct} limit={task.timeLimit}/>
@@ -328,14 +359,14 @@ function TrueFalseTask({task,onDone}){
   </div>;
 }
 
-function FillBlankTask({task,onDone}){
+function FillBlankTask({task,onDone,onRetry}){
   const {sentences}=task.data;
-  const [si,setSi]=useState(0);const [score,setScore]=useState(0);const [fb,setFb]=useState(null);const [done,setDone]=useState(false);
+  const [si,setSi]=useState(0);const [score,setScore]=useState(0);const [fb,setFb]=useState(null);const [done,setDone]=useState(false);const [correct,setCorrect]=useState(0);
   const {left,pct}=useTimer(task.timeLimit,()=>setDone(true));
   const perS=Math.round(task.basePoints/sentences.length);
-  const pick=(o)=>{if(fb)return;const s=sentences[si];const good=o===s.word;if(good)setScore(sc=>sc+perS+Math.round(left/task.timeLimit*20));setFb({good,text:good?`Pontosan illik a mondatba!`:`A helyes szó: ${s.word}`});};
+  const pick=(o)=>{if(fb)return;const s=sentences[si];const good=o===s.word;if(good){setScore(sc=>sc+perS+Math.round(left/task.timeLimit*20));setCorrect(c=>c+1);}setFb({good,text:good?`Pontosan illik a mondatba!`:`A helyes szó: ${s.word}`});};
   const next=()=>{setFb(null);if(si+1>=sentences.length)setDone(true);else setSi(s=>s+1);};
-  if(done)return <TaskResult task={task} score={score} maxScore={task.basePoints+sentences.length*20} onBack={()=>onDone(score)}/>;
+  if(done)return <TaskResult task={task} score={score} maxScore={task.basePoints+sentences.length*20} onBack={()=>onDone(score)} onRetry={onRetry} stats={{correct,wrong:sentences.length-correct,timeUsed:task.timeLimit?task.timeLimit-left:null}}/>;
   const s=sentences[si];
   return <div style={{flex:1,display:"flex",flexDirection:"column",position:"relative",overflow:"hidden"}}>
     <TimerBar left={left} pct={pct} limit={task.timeLimit}/>
@@ -352,10 +383,10 @@ function FillBlankTask({task,onDone}){
   </div>;
 }
 
-function MatchTask({task,onDone}){
+function MatchTask({task,onDone,onRetry}){
   const {pairs}=task.data;
   const [score,setScore]=useState(0);const [done,setDone]=useState(false);
-  const [selChar,setSelChar]=useState(null);const [matched,setMatched]=useState([]);const [wrong,setWrong]=useState(null);
+  const [selChar,setSelChar]=useState(null);const [matched,setMatched]=useState([]);const [wrong,setWrong]=useState(null);const [wrongCount,setWrongCount]=useState(0);
   const {left,pct}=useTimer(task.timeLimit,()=>setDone(true));
   const chars=[...pairs].map(p=>p.char).sort(()=>Math.random()-.5);
   const descs=[...pairs].map(p=>p.desc).sort(()=>Math.random()-.5);
@@ -364,9 +395,9 @@ function MatchTask({task,onDone}){
     if(!selChar||matched.find(m=>m.desc===desc))return;
     const pair=pairs.find(p=>p.char===selChar);
     if(pair.desc===desc){setScore(s=>s+perP+Math.round(left/task.timeLimit*15));setMatched(m=>[...m,{char:selChar,desc}]);setSelChar(null);if(matched.length+1>=pairs.length)setTimeout(()=>setDone(true),600);}
-    else{setWrong({char:selChar,desc});setTimeout(()=>setWrong(null),700);setSelChar(null);}
+    else{setWrong({char:selChar,desc});setWrongCount(w=>w+1);setTimeout(()=>setWrong(null),700);setSelChar(null);}
   };
-  if(done)return <TaskResult task={task} score={score} maxScore={task.basePoints+pairs.length*15} onBack={()=>onDone(score)}/>;
+  if(done)return <TaskResult task={task} score={score} maxScore={task.basePoints+pairs.length*15} onBack={()=>onDone(score)} onRetry={onRetry} stats={{correct:matched.length,wrong:wrongCount,timeUsed:task.timeLimit?task.timeLimit-left:null}}/>;
   return <div style={{flex:1,display:"flex",flexDirection:"column",position:"relative",overflow:"hidden"}}>
     <TimerBar left={left} pct={pct} limit={task.timeLimit}/>
     <div style={{flex:1,padding:"16px 14px",display:"flex",flexDirection:"column",gap:12,overflowY:"auto"}}>
@@ -383,7 +414,7 @@ function MatchTask({task,onDone}){
   </div>;
 }
 
-function OrderTask({task,onDone}){
+function OrderTask({task,onDone,onRetry}){
   const {events}=task.data;
   const [order,setOrder]=useState(()=>[...events].sort(()=>Math.random()-.5));
   const [submitted,setSubmitted]=useState(false);const [score,setScore]=useState(0);const [done,setDone]=useState(false);
@@ -395,7 +426,7 @@ function OrderTask({task,onDone}){
     const s=Math.round((correct/events.length)*task.basePoints)+Math.round(left/(task.timeLimit||1)*30);
     setScore(Math.min(s,task.basePoints+30));setSubmitted(true);setTimeout(()=>setDone(true),2000);
   };
-  if(done)return <TaskResult task={task} score={score} maxScore={task.basePoints+30} onBack={()=>onDone(score)}/>;
+  if(done)return <TaskResult task={task} score={score} maxScore={task.basePoints+30} onBack={()=>onDone(score)} onRetry={onRetry} stats={{timeUsed:task.timeLimit?task.timeLimit-left:null}}/>;
   return <div style={{flex:1,display:"flex",flexDirection:"column",position:"relative",overflow:"hidden"}}>
     <TimerBar left={left} pct={pct} limit={task.timeLimit}/>
     <div style={{flex:1,padding:"16px 14px",display:"flex",flexDirection:"column",gap:10,overflowY:"auto"}}>
@@ -420,16 +451,16 @@ function OrderTask({task,onDone}){
   </div>;
 }
 
-function RuneTask({task,onDone}){
+function RuneTask({task,onDone,onRetry}){
   const {puzzles}=task.data;
-  const [pi,setPi]=useState(0);const [typed,setTyped]=useState([]);const [score,setScore]=useState(0);const [fb,setFb]=useState(null);const [done,setDone]=useState(false);
+  const [pi,setPi]=useState(0);const [typed,setTyped]=useState([]);const [score,setScore]=useState(0);const [fb,setFb]=useState(null);const [done,setDone]=useState(false);const [correct,setCorrect]=useState(0);
   const {left,pct}=useTimer(task.timeLimit,()=>setDone(true));
   const perP=Math.round(task.basePoints/puzzles.length);
   const puzz=puzzles[pi];const encoded=enc(puzz.word);
-  const addL=(l)=>{if(fb||typed.length>=puzz.word.length)return;const n=[...typed,l];setTyped(n);if(n.length===puzz.word.length){const good=n.join("")===puzz.word;if(good)setScore(s=>s+perP+Math.round(left/task.timeLimit*28));setFb({good,text:good?`Pontosan! „${puzz.word}" — ${puzz.hint}`:`Helyes szó: „${puzz.word}". ${puzz.hint}`});}};
+  const addL=(l)=>{if(fb||typed.length>=puzz.word.length)return;const n=[...typed,l];setTyped(n);if(n.length===puzz.word.length){const good=n.join("")===puzz.word;if(good){setScore(s=>s+perP+Math.round(left/task.timeLimit*28));setCorrect(c=>c+1);}setFb({good,text:good?`Pontosan! „${puzz.word}" — ${puzz.hint}`:`Helyes szó: „${puzz.word}". ${puzz.hint}`});}};
   const next=()=>{setTyped([]);setFb(null);if(pi+1>=puzzles.length)setDone(true);else setPi(p=>p+1);};
   const alpha="ABCDEFGHIJKLMNOPRSTUVWZ".split("");
-  if(done)return <TaskResult task={task} score={score} maxScore={task.basePoints+puzzles.length*28} onBack={()=>onDone(score)}/>;
+  if(done)return <TaskResult task={task} score={score} maxScore={task.basePoints+puzzles.length*28} onBack={()=>onDone(score)} onRetry={onRetry} stats={{correct,wrong:puzzles.length-correct,timeUsed:task.timeLimit?task.timeLimit-left:null}}/>;
   return <div style={{flex:1,display:"flex",flexDirection:"column",position:"relative",overflow:"hidden"}}>
     <TimerBar left={left} pct={pct} limit={task.timeLimit}/>
     <div style={{flex:1,padding:"16px 14px",display:"flex",flexDirection:"column",gap:14,overflowY:"auto"}}>
@@ -450,14 +481,14 @@ function RuneTask({task,onDone}){
   </div>;
 }
 
-function QuoteTask({task,onDone}){
+function QuoteTask({task,onDone,onRetry}){
   const {quotes}=task.data;
-  const [qi,setQi]=useState(0);const [score,setScore]=useState(0);const [fb,setFb]=useState(null);const [done,setDone]=useState(false);
+  const [qi,setQi]=useState(0);const [score,setScore]=useState(0);const [fb,setFb]=useState(null);const [done,setDone]=useState(false);const [correct,setCorrect]=useState(0);
   const {left,pct}=useTimer(task.timeLimit,()=>setDone(true));
   const perQ=Math.round(task.basePoints/quotes.length);
-  const pick=(i)=>{if(fb)return;const q=quotes[qi];const good=i===q.ok;if(good)setScore(s=>s+perQ+Math.round(left/task.timeLimit*18));setFb({good,text:good?`Igen! ${q.chars[q.ok]} mondta.`:`Nem — ${q.chars[q.ok]} mondta ezeket.`});};
+  const pick=(i)=>{if(fb)return;const q=quotes[qi];const good=i===q.ok;if(good){setScore(s=>s+perQ+Math.round(left/task.timeLimit*18));setCorrect(c=>c+1);}setFb({good,text:good?`Igen! ${q.chars[q.ok]} mondta.`:`Nem — ${q.chars[q.ok]} mondta ezeket.`});};
   const next=()=>{setFb(null);if(qi+1>=quotes.length)setDone(true);else setQi(q=>q+1);};
-  if(done)return <TaskResult task={task} score={score} maxScore={task.basePoints+quotes.length*18} onBack={()=>onDone(score)}/>;
+  if(done)return <TaskResult task={task} score={score} maxScore={task.basePoints+quotes.length*18} onBack={()=>onDone(score)} onRetry={onRetry} stats={{correct,wrong:quotes.length-correct,timeUsed:task.timeLimit?task.timeLimit-left:null}}/>;
   const q=quotes[qi];
   return <div style={{flex:1,display:"flex",flexDirection:"column",position:"relative",overflow:"hidden"}}>
     <TimerBar left={left} pct={pct} limit={task.timeLimit}/>
@@ -473,16 +504,16 @@ function QuoteTask({task,onDone}){
   </div>;
 }
 
-function ScrambleTask({task,onDone}){
+function ScrambleTask({task,onDone,onRetry}){
   const {words}=task.data;
-  const [wi,setWi]=useState(0);const [score,setScore]=useState(0);const [fb,setFb]=useState(null);const [done,setDone]=useState(false);
+  const [wi,setWi]=useState(0);const [score,setScore]=useState(0);const [fb,setFb]=useState(null);const [done,setDone]=useState(false);const [correct,setCorrect]=useState(0);
   const [typed,setTyped]=useState([]);const [avail,setAvail]=useState(()=>[...words[0].letters].map((l,i)=>({l,i,used:false})));
-  const {left,pct}=useTimer(task.timeLimit,()=>setDone(true));
+  const {left,pct}=useTimer(task.timeLimit,()=>setDone(true));const startTime=useRef(Date.now());
   const word=words[wi];const perW=Math.round(task.basePoints/words.length);
-  const addL=(idx)=>{if(fb||avail[idx].used)return;const na=avail.map((a,i)=>i===idx?{...a,used:true}:a);const nt=[...typed,{l:avail[idx].l,srcIdx:idx}];setAvail(na);setTyped(nt);if(nt.length===word.answer.length){const good=nt.map(t=>t.l).join("")===word.answer;if(good)setScore(s=>s+perW+Math.round(left/task.timeLimit*22));setFb({good,text:good?`Pontos! „${word.answer}" — ${word.hint}`:`Helyes szó: „${word.answer}". ${word.hint}`});}};
+  const addL=(idx)=>{if(fb||avail[idx].used)return;const na=avail.map((a,i)=>i===idx?{...a,used:true}:a);const nt=[...typed,{l:avail[idx].l,srcIdx:idx}];setAvail(na);setTyped(nt);if(nt.length===word.answer.length){const good=nt.map(t=>t.l).join("")===word.answer;if(good){setScore(s=>s+perW+Math.round(left/task.timeLimit*22));setCorrect(c=>c+1);}setFb({good,text:good?`Pontos! „${word.answer}" — ${word.hint}`:`Helyes szó: „${word.answer}". ${word.hint}`});}};
   const rmLast=()=>{if(!typed.length||fb)return;const last=typed[typed.length-1];setAvail(a=>a.map((x,i)=>i===last.srcIdx?{...x,used:false}:x));setTyped(t=>t.slice(0,-1));};
   const next=()=>{setFb(null);if(wi+1>=words.length){setDone(true);return;}const nw=words[wi+1];setWi(w=>w+1);setTyped([]);setAvail([...nw.letters].map((l,i)=>({l,i,used:false})));};
-  if(done)return <TaskResult task={task} score={score} maxScore={task.basePoints+words.length*22} onBack={()=>onDone(score)}/>;
+  if(done){const timeUsed=Math.round((Date.now()-startTime.current)/1000);return <TaskResult task={task} score={score} maxScore={task.basePoints+words.length*22} onBack={()=>onDone(score)} onRetry={onRetry} stats={{correct,wrong:words.length-correct,timeUsed}}/>;}
   return <div style={{flex:1,display:"flex",flexDirection:"column",position:"relative",overflow:"hidden"}}>
     <TimerBar left={left} pct={pct} limit={task.timeLimit}/>
     <div style={{flex:1,padding:"16px 14px",display:"flex",flexDirection:"column",gap:14,overflowY:"auto",alignItems:"center"}}>
@@ -528,22 +559,24 @@ function ProphecyTask({task,onDone}){
 // ── TASK MODAL ─────────────────────────────────────────────────────────────────
 function TaskModal({task,user,onClose,onComplete}){
   const [phase,setPhase]=useState("intro");
+  const [retryKey,setRetryKey]=useState(0);
   const handleDone=(score)=>{onComplete(task.id,score);onClose();};
+  const handleRetry=()=>{setRetryKey(k=>k+1);setPhase("intro");};
   const TaskComp={quiz:QuizTask,truefalse:TrueFalseTask,fillblank:FillBlankTask,match:MatchTask,order:OrderTask,rune:RuneTask,quote:QuoteTask,scramble:ScrambleTask,prophecy:ProphecyTask}[task.type];
-  return <div style={{position:"fixed",inset:0,zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:10,background:"rgba(4,3,2,.92)",backdropFilter:"blur(6px)",animation:"fadeIn .3s ease"}}>
-    <div style={{width:"100%",maxWidth:570,background:"linear-gradient(162deg,rgba(20,15,11,.99),rgba(8,6,4,.99))",border:"1px solid rgba(201,168,76,.22)",boxShadow:"0 40px 100px rgba(0,0,0,.8)",display:"flex",flexDirection:"column",maxHeight:"92vh",overflow:"hidden",animation:"modalIn .35s cubic-bezier(.22,1,.36,1)"}}>
+  return <div style={{position:"fixed",inset:0,zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:10,background:"rgba(14,10,6,.97)",backdropFilter:"blur(12px)",animation:"fadeIn .3s ease"}}>
+    <div style={{width:"100%",maxWidth:570,background:"linear-gradient(162deg,rgba(20,15,11,.99),rgba(8,6,4,.99))",border:"1px solid rgba(201,168,76,.22)",boxShadow:"0 40px 100px rgba(0,0,0,.8),inset 0 1px 0 rgba(201,168,76,.08)",display:"flex",flexDirection:"column",maxHeight:"92vh",overflow:"hidden",animation:"modalIn .35s cubic-bezier(.22,1,.36,1)"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",borderBottom:"1px solid rgba(201,168,76,.1)",background:`linear-gradient(90deg,transparent,${task.glow.replace(".5",".06")},transparent)`,flexShrink:0}}>
         <div style={{display:"flex",alignItems:"center",gap:9}}>
-          <span style={{fontSize:"1.2rem"}}>{task.icon}</span>
+          <span style={{fontSize:"1.2rem",filter:`drop-shadow(0 0 8px ${task.glow})`}}>{task.icon}</span>
           <div>
             <div style={{fontFamily:"'Cinzel',serif",fontSize:".76rem",color:task.color,letterSpacing:".08em",textTransform:"uppercase"}}>{task.title}</div>
             <div style={{fontFamily:"'Cinzel',serif",fontSize:".56rem",color:"var(--gm)",letterSpacing:".1em"}}>{task.location}</div>
           </div>
         </div>
-        <button onClick={onClose} style={{background:"none",border:"1px solid rgba(201,168,76,.14)",color:"var(--gm)",width:30,height:30,cursor:"pointer",fontSize:".95rem"}}>×</button>
+        <button aria-label="Feladat bezárása" onClick={onClose} style={{background:"none",border:"1px solid rgba(201,168,76,.14)",color:"var(--gm)",width:30,height:30,cursor:"pointer",fontSize:".95rem",transition:"all .2s"}} onMouseEnter={e=>{e.target.style.borderColor="var(--gold)";e.target.style.color="var(--gold)";}} onMouseLeave={e=>{e.target.style.borderColor="rgba(201,168,76,.14)";e.target.style.color="var(--gm)";}}>×</button>
       </div>
       <div style={{flex:1,display:"flex",flexDirection:"column",overflowY:"auto"}}>
-        {phase==="intro"?<StoryIntro task={task} user={user} onStart={()=>setPhase("task")}/>:TaskComp?<TaskComp task={task} onDone={handleDone}/>:null}
+        {phase==="intro"?<StoryIntro task={task} user={user} onStart={()=>setPhase("task")}/>:TaskComp?<TaskComp key={retryKey} task={task} onDone={handleDone} onRetry={handleRetry}/>:null}
       </div>
     </div>
   </div>;
@@ -554,42 +587,223 @@ function AdventureMap({user,completed,scores,onSelect}){
   const race=RACES.find(r=>r.id===user?.race)||RACES[3];
   const [hov,setHov]=useState(null);
   const totalScore=Object.values(scores).reduce((a,b)=>a+b,0);
-  return <div style={{flex:1,position:"relative",overflow:"hidden",minHeight:0}}>
-    <div style={{position:"absolute",inset:0,background:"radial-gradient(ellipse at 30% 40%,rgba(107,140,62,.04) 0%,transparent 50%),radial-gradient(ellipse at 70% 60%,rgba(160,82,45,.04) 0%,transparent 50%)"}}/>
-    <svg style={{position:"absolute",inset:0,width:"100%",height:"100%",zIndex:2}} viewBox="0 0 100 100" preserveAspectRatio="none">
-      {[10,20,30,40,50,60,70,80,90].map(v=><g key={v}><line x1={v} y1="0" x2={v} y2="100" stroke="rgba(201,168,76,.03)" strokeWidth=".2"/><line x1="0" y1={v} x2="100" y2={v} stroke="rgba(201,168,76,.03)" strokeWidth=".2"/></g>)}
-      {MAP_PATHS.map((d,i)=><path key={i} d={d} fill="none" stroke="rgba(201,168,76,.14)" strokeWidth=".5" strokeDasharray="1.5,1.5" vectorEffect="non-scaling-stroke"/>)}
-      {[[25,70],[65,55],[80,45],[45,85],[20,35],[88,65],[55,88]].map(([x,y],i)=><g key={i} opacity=".07"><polygon points={`${x},${y-5} ${x-4},${y+3} ${x+4},${y+3}`} fill="rgba(201,168,76,.5)" stroke="rgba(201,168,76,.3)" strokeWidth=".3"/></g>)}
-    </svg>
-    {TASKS.map((task)=>{
-      const isDone=completed.includes(task.id);const isHov=hov===task.id;
-      return <div key={task.id} style={{position:"absolute",left:`${task.mx}%`,top:`${task.my}%`,transform:"translate(-50%,-50%)",zIndex:10,cursor:"pointer"}} onMouseEnter={()=>setHov(task.id)} onMouseLeave={()=>setHov(null)} onClick={()=>onSelect(task)}>
-        {!isDone&&<div style={{position:"absolute",inset:-10,borderRadius:"50%",border:`1.5px solid ${task.color}`,opacity:.25,animation:"nodePulse 2.5s ease-in-out infinite"}}/>}
-        <div style={{position:"relative",width:44,height:44,borderRadius:"50%",border:`2px solid ${isDone?"var(--gold)":isHov?task.color:"rgba(201,168,76,.25)"}`,background:isDone?`radial-gradient(circle,${task.glow},rgba(0,0,0,.8))`:`rgba(8,6,4,.85)`,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .2s",transform:isHov?"scale(1.18)":"scale(1)",boxShadow:isDone?`0 0 18px ${task.glow}`:isHov?`0 0 14px ${task.glow}`:"none",backdropFilter:"blur(4px)"}}>
-          <span style={{fontSize:"1.1rem"}}>{isDone?"✅":task.icon}</span>
+  const roadCurve=(x1,y1,x2,y2)=>{const dx=x2-x1,dy=y2-y1;return `M${x1} ${y1} C${x1+dx*.35+(dy>0?1.5:-1.5)} ${y1+dy*.15} ${x2-dx*.35+(dy>0?-1.5:1.5)} ${y2-dy*.15} ${x2} ${y2}`;};
+  return <div style={{flex:1,position:"relative",overflow:"hidden",minHeight:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+    <div className="map-parchment" style={{position:"relative",width:"100%",maxWidth:"min(100%,calc(100vh * 16/9))",aspectRatio:"16/9",overflow:"hidden",boxShadow:"0 4px 80px rgba(0,0,0,.85),inset 0 0 100px rgba(10,6,2,.6)"}}>
+      {/* ═══ MULTI-LAYER PARCHMENT ═══ */}
+      <div style={{position:"absolute",inset:0,background:"radial-gradient(ellipse at 35% 30%,#4a3c26,#2a1e10 55%,#181008)",zIndex:0}}/>
+      <div style={{position:"absolute",inset:0,background:"radial-gradient(circle at 72% 22%,rgba(201,168,76,.1),transparent 40%)",zIndex:0}}/>
+      <div style={{position:"absolute",inset:0,background:"radial-gradient(circle at 14% 72%,rgba(107,160,62,.08),transparent 35%)",zIndex:0}}/>
+      <div style={{position:"absolute",inset:0,background:"radial-gradient(circle at 55% 60%,rgba(160,82,45,.06),transparent 30%)",zIndex:0}}/>
+      <div style={{position:"absolute",inset:0,background:"radial-gradient(circle at 88% 50%,rgba(196,130,58,.08),transparent 25%)",zIndex:0}}/>
+      {/* Age stains */}
+      <div style={{position:"absolute",left:"20%",top:"15%",width:"18%",height:"22%",background:"radial-gradient(circle,rgba(100,75,35,.1),transparent 70%)",zIndex:1,borderRadius:"50%",pointerEvents:"none"}}/>
+      <div style={{position:"absolute",left:"65%",top:"58%",width:"14%",height:"18%",background:"radial-gradient(circle,rgba(80,60,25,.08),transparent 70%)",zIndex:1,borderRadius:"50%",pointerEvents:"none"}}/>
+      <div style={{position:"absolute",left:"42%",top:"78%",width:"10%",height:"14%",background:"radial-gradient(circle,rgba(60,50,30,.06),transparent 65%)",zIndex:1,borderRadius:"50%",pointerEvents:"none"}}/>
+
+      {/* ═══ SVG LAYER ═══ */}
+      <svg style={{position:"absolute",inset:0,width:"100%",height:"100%",zIndex:2}} viewBox="0 0 100 100" preserveAspectRatio="none">
+        <defs>
+          <filter id="softGlow"><feGaussianBlur stdDeviation="1.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <filter id="terrainGlow"><feGaussianBlur stdDeviation=".6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <linearGradient id="gBord" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stopColor="#C9A84C" stopOpacity=".5"/><stop offset="50%" stopColor="#E8D48B" stopOpacity=".22"/><stop offset="100%" stopColor="#C9A84C" stopOpacity=".5"/></linearGradient>
+          <linearGradient id="shireGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#5a9a3a"/><stop offset="100%" stopColor="#2a5a14"/></linearGradient>
+          <linearGradient id="mtGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#b8a898"/><stop offset="100%" stopColor="#5a4e40"/></linearGradient>
+          <linearGradient id="fGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#4a7a24"/><stop offset="100%" stopColor="#1a3a0a"/></linearGradient>
+          <radialGradient id="eGlow" cx="50%" cy="60%" r="50%"><stop offset="0%" stopColor="#ff8a20" stopOpacity=".25"/><stop offset="60%" stopColor="#C4823A" stopOpacity=".08"/><stop offset="100%" stopColor="#C4823A" stopOpacity="0"/></radialGradient>
+          <linearGradient id="snowGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#fff" stopOpacity=".9"/><stop offset="100%" stopColor="#c8d0e0" stopOpacity=".5"/></linearGradient>
+        </defs>
+
+        {/* ─── DECORATIVE BORDER ─── */}
+        <rect x=".6" y=".6" width="98.8" height="98.8" fill="none" stroke="url(#gBord)" strokeWidth=".6" rx=".4"/>
+        <rect x="1.8" y="1.8" width="96.4" height="96.4" fill="none" stroke="rgba(201,168,76,.15)" strokeWidth=".18" rx=".3"/>
+        {/* Corner ornaments */}
+        {[[3,3],[97,3],[3,97],[97,97]].map(([cx,cy],i)=><g key={`co${i}`}>
+          <line x1={cx-1.5} y1={cy} x2={cx+1.5} y2={cy} stroke="rgba(201,168,76,.28)" strokeWidth=".12"/>
+          <line x1={cx} y1={cy-1.5} x2={cx} y2={cy+1.5} stroke="rgba(201,168,76,.28)" strokeWidth=".12"/>
+          <circle cx={cx} cy={cy} r=".55" fill="rgba(201,168,76,.3)"/>
+          <circle cx={cx} cy={cy} r=".2" fill="rgba(201,168,76,.5)"/>
+        </g>)}
+        {/* Edge ticks */}
+        {[15,25,35,45,55,65,75,85].map(v=><g key={`tk${v}`}>
+          <line x1={v} y1=".6" x2={v} y2="1.8" stroke="rgba(201,168,76,.08)" strokeWidth=".08"/>
+          <line x1={v} y1="98.2" x2={v} y2="99.4" stroke="rgba(201,168,76,.08)" strokeWidth=".08"/>
+          <line x1=".6" y1={v} x2="1.8" y2={v} stroke="rgba(201,168,76,.08)" strokeWidth=".08"/>
+          <line x1="98.2" y1={v} x2="99.4" y2={v} stroke="rgba(201,168,76,.08)" strokeWidth=".08"/>
+        </g>)}
+        {/* Subtle grid */}
+        {[20,40,60,80].map(v=><g key={`gr${v}`}><line x1={v} y1="2" x2={v} y2="98" stroke="rgba(201,168,76,.018)" strokeWidth=".06"/><line x1="2" y1={v} x2="98" y2={v} stroke="rgba(201,168,76,.018)" strokeWidth=".06"/></g>)}
+
+        {/* ─── TERRAIN: Shire — nodes:(10,62)(18,72)(12,80) ─── */}
+        <g>
+          <ellipse cx="14" cy="82" rx="16" ry="7" fill="#2a5a16" opacity=".7"/>
+          <ellipse cx="6" cy="76" rx="10" ry="5" fill="#347a20" opacity=".6"/>
+          <ellipse cx="22" cy="80" rx="9" ry="4" fill="#2e6a1a" opacity=".55"/>
+          <ellipse cx="12" cy="72" rx="8" ry="4" fill="#3e8a2a" opacity=".5"/>
+          <ellipse cx="20" cy="74" rx="6" ry="3" fill="#389a28" opacity=".4"/>
+          <ellipse cx="4" cy="86" rx="7" ry="3.5" fill="#2a5a16" opacity=".5"/>
+          <ellipse cx="16" cy="66" rx="5" ry="2.5" fill="#4a9a34" opacity=".3"/>
+        </g>
+
+        {/* ─── TERRAIN: Rivendell — nodes:(28,32)(36,40)(30,48) ─── */}
+        <g>
+          <path d="M24 54 L26 30 L28 36 L30 26 L32 32 L34 22 L36 28 L38 34 L40 54" fill="#1a3038" opacity=".55" stroke="#3a7a8a" strokeWidth=".3" strokeOpacity=".4"/>
+          <path d="M26 52 L28 32 L30 28 L32 34 L34 24 L36 30 L38 34 L40 52" fill="#1a3842" opacity=".35"/>
+          <line x1="30" y1="27" x2="30.2" y2="50" stroke="#5ac0e0" strokeWidth=".5" strokeDasharray=".6,.8" opacity=".28"/>
+          <line x1="36" y1="25" x2="35.8" y2="47" stroke="#5ac0e0" strokeWidth=".35" strokeDasharray=".5,.7" opacity=".2"/>
+          <path d="M27 40 Q32 33 37 40" fill="none" stroke="#4a9aba" strokeWidth=".3" opacity=".4"/>
+          <line x1="33" y1="24" x2="33" y2="18" stroke="#4a9aba" strokeWidth=".2" opacity=".35"/>
+          <circle cx="33" cy="17.5" r=".4" fill="#4a9aba" opacity=".3"/>
+        </g>
+
+        {/* ─── TERRAIN: Mirkwood — nodes:(50,52)(56,60)(52,68) ─── */}
+        <g>
+          <ellipse cx="53" cy="68" rx="12" ry="7" fill="#0a1a05" opacity=".35"/>
+          {[[44,70],[46,66],[48,62],[50,58],[52,54],[54,51],[56,54],[58,58],[60,62],[62,66],[64,70]].map(([x,y],i)=>
+            <polygon key={`tb${i}`} points={`${x},${y+6} ${x+.6},${y-4.5} ${x+1.2},${y+6}`} fill="#1a4a10" opacity=".6"/>
+          )}
+          {[[45,71],[47,67],[49,63],[51,58],[53,54],[55,52],[57,55],[59,59],[61,63],[63,68]].map(([x,y],i)=>
+            <polygon key={`tf${i}`} points={`${x},${y+5} ${x+.9},${y-5.5} ${x+1.8},${y+5}`} fill="#2a6a18" opacity=".65"/>
+          )}
+          {[[46,70],[49,64],[52,58],[55,54],[58,57],[61,63]].map(([x,y],i)=>
+            <polygon key={`tt${i}`} points={`${x+.3},${y+4} ${x+.7},${y-3.5} ${x+1.1},${y+4}`} fill="#3a8a22" opacity=".4"/>
+          )}
+        </g>
+
+        {/* ─── TERRAIN: Ködös Hegyek — nodes:(70,24)(77,32)(73,40) ─── */}
+        <g>
+          <path d="M62 46 L65 32 L68 38 L71 26 L74 18 L77 24 L80 30 L83 46" fill="#3a3430" opacity=".6" stroke="#5a5244" strokeWidth=".15" strokeOpacity=".35"/>
+          <path d="M64 46 L67 30 L70 36 L73 22 L76 14 L79 22 L82 32 L85 46" fill="#4a4238" opacity=".55" stroke="#6a5e50" strokeWidth=".12" strokeOpacity=".25"/>
+          <path d="M66 46 L69 32 L72 24 L75 16 L78 26 L80 36 L82 46" fill="#5a5040" opacity=".5"/>
+          <path d="M76 14 L74.5 20 L77.5 20 Z" fill="#c8c4bc" opacity=".3"/>
+          <path d="M74 18 L73 22 L75 22 Z" fill="#c0bcb4" opacity=".22"/>
+          <path d="M71 26 L70 30 L72 30 Z" fill="#b8b4ac" opacity=".15"/>
+          <ellipse cx="75" cy="22" rx="4" ry=".8" fill="#8a8078" opacity=".1"/>
+          <ellipse cx="80" cy="28" rx="3" ry=".6" fill="#8a8078" opacity=".07"/>
+        </g>
+
+        {/* ─── TERRAIN: Erebor — nodes:(86,42)(92,52)(88,60) ─── */}
+        <g>
+          <ellipse cx="89" cy="64" rx="9" ry="3.5" fill="#2a1a0a" opacity=".35"/>
+          <path d="M80 66 L83 50 L85.5 54 L87 44 L89 30 L91 44 L93 54 L95 50 L98 66" fill="#3a2a18" opacity=".6" stroke="#5a4228" strokeWidth=".15" strokeOpacity=".3"/>
+          <path d="M82 66 L85 52 L87 44 L89 32 L91 44 L93 52 L96 66" fill="#4a3820" opacity=".5"/>
+          <path d="M85 66 L87.5 46 L89 34 L90.5 46 L93 66" fill="#5a4828" opacity=".35"/>
+          <path d="M89 30 L87.5 36 L90.5 36 Z" fill="#c8c4bc" opacity=".25"/>
+          <path d="M87 60 Q89 54 91 60" fill="none" stroke="#ba8a3a" strokeWidth=".35" opacity=".4"/>
+          <line x1="89" y1="55" x2="89" y2="60" stroke="#ba8a3a" strokeWidth=".15" opacity=".3"/>
+          <ellipse cx="89" cy="55" rx="3.5" ry="3.5" fill="url(#eGlow)"/>
+          {[[87,57],[90,56],[88,53],[91,55],[86.5,59],[89,52]].map(([x,y],i)=>
+            <circle key={`sp${i}`} cx={x} cy={y} r=".2" fill="#f0c848" opacity=".18" className="map-sparkle"/>
+          )}
+        </g>
+
+        {/* ─── RIVER — flows between regions ─── */}
+        <path d="M80 38 Q72 44 64 46 Q56 48 48 46 Q40 44 32 48 Q24 52 16 58 Q10 64 6 76" fill="none" stroke="#3a7a9a" strokeWidth="2" strokeLinecap="round" opacity=".08"/>
+        <path d="M80 38 Q72 44 64 46 Q56 48 48 46 Q40 44 32 48 Q24 52 16 58 Q10 64 6 76" fill="none" stroke="#4a9abe" strokeWidth=".8" strokeLinecap="round" opacity=".18"/>
+        <path d="M80 38 Q72 44 64 46 Q56 48 48 46 Q40 44 32 48 Q24 52 16 58 Q10 64 6 76" fill="none" stroke="#6acaee" strokeWidth=".2" strokeLinecap="round" opacity=".12"/>
+
+        {/* ─── ROADS ─── */}
+        {REGIONS.map((reg,ri)=>reg.nodes.map((n,ni)=>{
+          const next=ni<reg.nodes.length-1?reg.nodes[ni+1]:REGIONS[ri+1]?.nodes[0];
+          if(!next)return null;
+          const allDone=reg.tasks.slice(0,ni+1).every(t=>completed.includes(t));
+          const d=roadCurve(n.x,n.y,next.x,next.y);
+          return <g key={`rd${ri}-${ni}`}>
+            <path d={d} fill="none" stroke="rgba(0,0,0,.08)" strokeWidth={allDone?".6":".3"} strokeLinecap="round"/>
+            <path d={d} fill="none" stroke={allDone?"rgba(201,168,76,.3)":"rgba(201,168,76,.08)"} strokeWidth={allDone?".35":".2"} strokeLinecap="round" strokeDasharray={allDone?"none":".6,.6"}/>
+            {allDone&&<path d={d} fill="none" stroke="rgba(201,168,76,.15)" strokeWidth=".15" strokeLinecap="round"/>}
+          </g>;
+        }))}
+      </svg>
+
+      {/* ═══ COMPASS ROSE (HTML — no SVG stretch) ═══ */}
+      <div style={{position:"absolute",bottom:14,right:14,width:52,height:52,zIndex:7,opacity:.4,pointerEvents:"none"}}>
+        <svg viewBox="0 0 52 52" style={{width:"100%",height:"100%"}}>
+          <circle cx="26" cy="26" r="21" fill="none" stroke="rgba(201,168,76,.35)" strokeWidth=".8"/>
+          <circle cx="26" cy="26" r="17" fill="none" stroke="rgba(201,168,76,.18)" strokeWidth=".5"/>
+          <polygon points="26,5 24.5,23 27.5,23" fill="rgba(201,168,76,.45)"/>
+          <polygon points="26,47 24.5,29 27.5,29" fill="rgba(201,168,76,.15)"/>
+          <polygon points="5,26 23,24.5 23,27.5" fill="rgba(201,168,76,.15)"/>
+          <polygon points="47,26 29,24.5 29,27.5" fill="rgba(201,168,76,.15)"/>
+          <polygon points="10,10 23,24 24,23" fill="rgba(201,168,76,.07)"/>
+          <polygon points="42,10 29,24 28,23" fill="rgba(201,168,76,.07)"/>
+          <polygon points="10,42 23,28 24,29" fill="rgba(201,168,76,.07)"/>
+          <polygon points="42,42 29,28 28,29" fill="rgba(201,168,76,.07)"/>
+          <circle cx="26" cy="26" r="2" fill="rgba(201,168,76,.25)"/>
+          <circle cx="26" cy="26" r=".8" fill="rgba(201,168,76,.4)"/>
+          <text x="26" y="3.5" textAnchor="middle" fill="rgba(201,168,76,.5)" fontSize="4.5" fontFamily="Cinzel,serif" dominantBaseline="auto">É</text>
+          <text x="26" y="51.5" textAnchor="middle" fill="rgba(201,168,76,.25)" fontSize="3.5" fontFamily="Cinzel,serif">D</text>
+          <text x="1" y="28" textAnchor="middle" fill="rgba(201,168,76,.25)" fontSize="3.5" fontFamily="Cinzel,serif">Ny</text>
+          <text x="51" y="28" textAnchor="middle" fill="rgba(201,168,76,.25)" fontSize="3.5" fontFamily="Cinzel,serif">K</text>
+        </svg>
+      </div>
+
+      {/* ═══ REGION LABELS ═══ */}
+      {REGIONS.map((reg,ri)=>{
+        const unlocked=isRegionUnlocked(ri,completed);
+        const doneCount=reg.tasks.filter(t=>completed.includes(t)).length;
+        return <div key={reg.id} style={{position:"absolute",left:`${reg.label.x}%`,top:`${reg.label.y}%`,transform:"translate(-50%,-50%)",textAlign:"center",zIndex:4,pointerEvents:"none",opacity:unlocked?1:.2,transition:"opacity .6s"}}>
+          <div style={{fontSize:"1.6rem",marginBottom:3,filter:unlocked?"none":"grayscale(1) brightness(.5)"}}>{reg.icon}</div>
+          <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"clamp(.52rem,1.3vw,.75rem)",color:reg.color,letterSpacing:".08em",textShadow:`0 0 18px ${reg.glow},0 1px 4px rgba(0,0,0,.9)`,whiteSpace:"nowrap"}}>{reg.name}</div>
+          <div style={{width:42,height:1,background:`linear-gradient(90deg,transparent,${reg.color}44,transparent)`,margin:"3px auto 2px"}}/>
+          <div style={{fontFamily:"'Cinzel',serif",fontSize:".44rem",color:"var(--gm)",letterSpacing:".1em"}}>{doneCount}/{reg.tasks.length}</div>
+        </div>;
+      })}
+
+      {/* ═══ QUEST NODES ═══ */}
+      {REGIONS.map((reg,ri)=>{
+        const unlocked=isRegionUnlocked(ri,completed);
+        return reg.tasks.map((taskId,ti)=>{
+          const task=TASKS.find(t=>t.id===taskId);
+          const node=reg.nodes[ti];
+          if(!task||!node)return null;
+          const isDone=completed.includes(taskId);const isHov=hov===taskId;
+          return <div key={taskId} style={{position:"absolute",left:`${node.x}%`,top:`${node.y}%`,transform:"translate(-50%,-50%)",zIndex:10,cursor:unlocked?"pointer":"default",opacity:unlocked?1:.12,transition:"opacity .6s"}} onMouseEnter={()=>unlocked&&setHov(taskId)} onMouseLeave={()=>setHov(null)} onClick={()=>unlocked&&onSelect(task)}>
+            {!isDone&&unlocked&&<div style={{position:"absolute",inset:-10,borderRadius:"50%",border:`1.5px solid ${reg.color}`,opacity:.2,animation:"nodePulse 2.5s ease-in-out infinite"}}/>}
+            {(isDone||isHov)&&<div style={{position:"absolute",inset:-5,borderRadius:"50%",background:`radial-gradient(circle,${reg.glow},transparent 70%)`,opacity:isDone?.35:.2,transition:"opacity .3s"}}/>}
+            <div style={{position:"relative",width:46,height:46,borderRadius:"50%",border:`2.5px solid ${isDone?"var(--gold)":isHov?reg.color:"rgba(201,168,76,.16)"}`,background:isDone?`radial-gradient(circle at 40% 35%,${reg.glow},rgba(8,6,4,.9))`:`radial-gradient(circle at 40% 35%,rgba(40,32,22,.95),rgba(8,6,4,.92))`,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .3s cubic-bezier(.22,1,.36,1)",transform:isHov?"scale(1.25)":"scale(1)",boxShadow:isDone?`0 0 22px ${reg.glow},0 2px 10px rgba(0,0,0,.6)`:isHov?`0 0 18px ${reg.glow},0 2px 8px rgba(0,0,0,.5)`:"0 2px 8px rgba(0,0,0,.4)"}}>
+              <span style={{fontSize:"1.15rem",filter:isDone?"none":"brightness(.85)"}}>{isDone?"✅":task.icon}</span>
+              <div style={{position:"absolute",inset:3,borderRadius:"50%",border:`1px solid ${isDone?"rgba(201,168,76,.12)":"rgba(201,168,76,.05)"}`,pointerEvents:"none"}}/>
+            </div>
+            <div style={{position:"absolute",top:"calc(100% + 5px)",left:"50%",transform:"translateX(-50%)",whiteSpace:"nowrap",fontFamily:"'Cinzel',serif",fontSize:".48rem",letterSpacing:".07em",color:isDone?"var(--gold)":isHov?reg.color:"rgba(201,168,76,.28)",textTransform:"uppercase",textAlign:"center",textShadow:"0 0 8px rgba(0,0,0,.95),0 1px 3px rgba(0,0,0,.8)",pointerEvents:"none",transition:"color .3s"}}>
+              {task.num}{isDone&&<span style={{marginLeft:3,color:"var(--gold)",opacity:.6,fontSize:".42rem"}}>{scores[taskId]||0}pt</span>}
+            </div>
+            {isHov&&<div style={{position:"absolute",bottom:"calc(100% + 16px)",left:"50%",transform:"translateX(-50%)",background:"rgba(8,6,3,.97)",border:`1px solid ${reg.color}44`,padding:"10px 14px",minWidth:185,zIndex:20,boxShadow:`0 0 28px ${reg.glow},0 8px 32px rgba(0,0,0,.7)`,animation:"fadeIn .2s ease",pointerEvents:"none",backdropFilter:"blur(10px)"}}>
+              <div style={{position:"absolute",bottom:-6,left:"50%",transform:"translateX(-50%) rotate(45deg)",width:10,height:10,background:"rgba(8,6,3,.97)",borderRight:`1px solid ${reg.color}44`,borderBottom:`1px solid ${reg.color}44`}}/>
+              <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".72rem",color:reg.color,marginBottom:3,letterSpacing:".06em"}}>{task.title}</div>
+              <div style={{fontStyle:"italic",fontSize:".75rem",color:"var(--td)",lineHeight:1.5,marginBottom:6}}>{task.subtitle}</div>
+              <div style={{display:"flex",gap:10,borderTop:`1px solid rgba(201,168,76,.08)`,paddingTop:5}}>
+                <span style={{fontFamily:"'Cinzel',serif",fontSize:".56rem",color:"var(--gm)"}}>⏳ {task.timeLimit||"∞"}s</span>
+                <span style={{fontFamily:"'Cinzel',serif",fontSize:".56rem",color:"var(--gm)"}}>🏆 {task.basePoints}pt</span>
+                {isDone&&<span style={{fontFamily:"'Cinzel',serif",fontSize:".56rem",color:"var(--gold)"}}>✓ Kész</span>}
+              </div>
+            </div>}
+          </div>;
+        });
+      })}
+
+      {/* ═══ FOG OF WAR ═══ */}
+      {REGIONS.map((reg,ri)=>{
+        if(isRegionUnlocked(ri,completed))return null;
+        return <div key={`fog-${reg.id}`} style={{position:"absolute",left:`${reg.label.x-15}%`,top:`${reg.label.y-14}%`,width:"30%",height:"60%",background:`radial-gradient(ellipse,rgba(6,4,2,.82) 15%,rgba(6,4,2,.4) 45%,transparent 70%)`,zIndex:6,pointerEvents:"none",transition:"opacity 1s"}}/>
+      })}
+
+      {/* ═══ TITLE CARTOUCHE ═══ */}
+      <div style={{position:"absolute",top:10,left:"50%",transform:"translateX(-50%)",textAlign:"center",zIndex:7,pointerEvents:"none"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:35,height:1,background:"linear-gradient(90deg,transparent,rgba(201,168,76,.22))"}}/>
+          <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"clamp(.58rem,1.7vw,.88rem)",color:"rgba(201,168,76,.5)",letterSpacing:".14em",textShadow:"0 0 18px rgba(201,168,76,.15)"}}>KÖZÉPFÖLDÉ TÉRKÉPE</div>
+          <div style={{width:35,height:1,background:"linear-gradient(90deg,rgba(201,168,76,.22),transparent)"}}/>
         </div>
-        <div style={{position:"absolute",top:"calc(100% + 4px)",left:"50%",transform:"translateX(-50%)",whiteSpace:"nowrap",fontFamily:"'Cinzel',serif",fontSize:".52rem",letterSpacing:".07em",color:isDone?"var(--gold)":isHov?task.color:"rgba(201,168,76,.4)",textTransform:"uppercase",textAlign:"center",textShadow:"0 0 8px rgba(0,0,0,.9)",pointerEvents:"none"}}>
-          {task.location}{isDone&&<div style={{fontSize:".5rem",color:"var(--gold)",opacity:.7}}>{scores[task.id]||0}pt</div>}
-        </div>
-        <div style={{position:"absolute",top:-7,right:-7,width:16,height:16,borderRadius:"50%",background:"rgba(8,6,4,.9)",border:`1px solid ${task.color}`,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Cinzel',serif",fontSize:".44rem",color:task.color}}>{task.num}</div>
-        {isHov&&<div style={{position:"absolute",bottom:"calc(100% + 10px)",left:"50%",transform:"translateX(-50%)",background:"rgba(10,8,5,.97)",border:`1px solid ${task.color}`,padding:"9px 13px",minWidth:170,zIndex:20,boxShadow:`0 0 18px ${task.glow}`,animation:"fadeIn .2s ease",pointerEvents:"none"}}>
-          <div style={{fontFamily:"'Cinzel',serif",fontSize:".7rem",color:task.color,marginBottom:3,letterSpacing:".06em"}}>{task.title}</div>
-          <div style={{fontStyle:"italic",fontSize:".74rem",color:"var(--td)",lineHeight:1.4}}>{task.subtitle}</div>
-          <div style={{display:"flex",gap:8,marginTop:5}}>
-            <span style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",color:"var(--gm)"}}>⏳{task.timeLimit||"∞"}s</span>
-            <span style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",color:"var(--gm)"}}>🏆{task.basePoints}pt</span>
-            {isDone&&<span style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",color:"var(--gold)"}}>✓Kész</span>}
-          </div>
-        </div>}
-      </div>;
-    })}
-    <div style={{position:"absolute",top:12,left:"50%",transform:"translateX(-50%)",textAlign:"center",zIndex:5,pointerEvents:"none"}}>
-      <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"clamp(.75rem,2.2vw,1.05rem)",color:"rgba(201,168,76,.28)",letterSpacing:".06em"}}>KÖZÉPFÖLDÉ TÉRKÉPE</div>
-    </div>
-    <div style={{position:"absolute",bottom:12,left:"50%",transform:"translateX(-50%)",background:"rgba(8,6,4,.88)",border:"1px solid rgba(201,168,76,.14)",padding:"8px 16px",display:"flex",alignItems:"center",gap:14,backdropFilter:"blur(8px)",zIndex:5,whiteSpace:"nowrap"}}>
-      <div style={{fontFamily:"'Cinzel',serif",fontSize:".6rem",letterSpacing:".12em",color:"var(--gm)",textTransform:"uppercase"}}>{completed.length}/{TASKS.length} teljesítve</div>
-      <div style={{width:100,height:3,background:"rgba(255,255,255,.05)",borderRadius:2}}><div style={{height:"100%",width:`${(completed.length/TASKS.length)*100}%`,background:"linear-gradient(90deg,var(--gm),var(--gold))",borderRadius:2,transition:"width .5s"}}/></div>
-      <div style={{fontFamily:"'Cinzel',serif",fontSize:".6rem",color:"var(--gold)"}}>{totalScore}pt</div>
+      </div>
+
+      {/* ═══ STATUS BAR ═══ */}
+      <div style={{position:"absolute",bottom:10,left:"50%",transform:"translateX(-50%)",background:"rgba(8,6,4,.92)",border:"1px solid rgba(201,168,76,.14)",padding:"7px 18px",display:"flex",alignItems:"center",gap:14,backdropFilter:"blur(10px)",zIndex:7,whiteSpace:"nowrap",boxShadow:"0 4px 20px rgba(0,0,0,.5)"}}>
+        <div style={{width:3,height:14,background:`linear-gradient(180deg,${race.color},transparent)`,borderRadius:2}}/>
+        <div style={{fontFamily:"'Cinzel',serif",fontSize:".56rem",letterSpacing:".1em",color:"var(--gm)",textTransform:"uppercase"}}>{completed.length}/{TASKS.length} teljesítve</div>
+        <div style={{width:90,height:4,background:"rgba(255,255,255,.04)",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:`${(completed.length/TASKS.length)*100}%`,background:`linear-gradient(90deg,${race.color}88,var(--gold))`,borderRadius:3,transition:"width .6s cubic-bezier(.22,1,.36,1)"}}/></div>
+        <div style={{fontFamily:"'Cinzel',serif",fontSize:".56rem",color:"var(--gold)",letterSpacing:".06em"}}>{totalScore} pont</div>
+      </div>
     </div>
   </div>;
 }
@@ -719,18 +933,49 @@ function WordSearch(){
 }
 
 function MiniGamesTab(){
-  const [game,setGame]=useState("memory");
-  const games=[{id:"memory",label:"Memória",icon:"🃏"},{id:"reaction",label:"Reflexek",icon:"⚡"},{id:"wordsearch",label:"Szókereső",icon:"🔍"}];
+  const [activeGame,setActiveGame]=useState(null);
+  const [carouselIdx,setCarouselIdx]=useState(0);
+  const touchRef=useRef(null);
+  const games=[
+    {id:"memory",label:"Tolkien Memória",icon:"🃏",desc:"Találd meg a párokat!",color:"#C9A84C"},
+    {id:"reaction",label:"Kalandor Reflexek",icon:"⚡",desc:"Barát vagy ellenség?",color:"#7A4ABB"},
+    {id:"wordsearch",label:"Tolkien Szókereső",icon:"🔍",desc:"Keresd meg a neveket!",color:"#3A7A8B"},
+  ];
+  const swipeStart=(e)=>{touchRef.current=e.touches?e.touches[0].clientX:e.clientX;};
+  const swipeEnd=(e)=>{if(touchRef.current===null)return;const end=e.changedTouches?e.changedTouches[0].clientX:e.clientX;const diff=touchRef.current-end;if(Math.abs(diff)>50){if(diff>0&&carouselIdx<games.length-1)setCarouselIdx(i=>i+1);else if(diff<0&&carouselIdx>0)setCarouselIdx(i=>i-1);}touchRef.current=null;};
+  if(activeGame){
+    const GameComp=activeGame==="memory"?MemoryGame:activeGame==="reaction"?ReactionGame:WordSearch;
+    return <div style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}>
+      <div style={{display:"flex",alignItems:"center",padding:"10px 14px",borderBottom:"1px solid rgba(201,168,76,.12)",flexShrink:0,gap:10}}>
+        <button onClick={()=>setActiveGame(null)} style={{background:"none",border:"1px solid rgba(201,168,76,.2)",color:"var(--gm)",padding:"4px 10px",fontFamily:"'Cinzel',serif",fontSize:".65rem",cursor:"pointer"}}>← Vissza</button>
+        <div style={{fontFamily:"'Cinzel',serif",fontSize:".72rem",color:"var(--gold)",letterSpacing:".08em"}}>{games.find(g=>g.id===activeGame)?.icon} {games.find(g=>g.id===activeGame)?.label}</div>
+      </div>
+      <div style={{flex:1,overflowY:"auto"}}><GameComp/></div>
+    </div>;
+  }
   return <div style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}>
-    <div style={{display:"flex",borderBottom:"1px solid rgba(201,168,76,.12)",flexShrink:0}}>
-      {games.map(g=><button key={g.id} onClick={()=>setGame(g.id)} style={{flex:1,padding:"10px 8px",background:game===g.id?"rgba(201,168,76,.06)":"transparent",border:"none",borderBottom:`2px solid ${game===g.id?"var(--gold)":"transparent"}`,color:game===g.id?"var(--gold)":"var(--gm)",fontFamily:"'Cinzel',serif",fontSize:".68rem",letterSpacing:".08em",cursor:"pointer",transition:"all .2s",display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
-        <span style={{fontSize:"1.1rem"}}>{g.icon}</span>{g.label}
-      </button>)}
+    {/* Tavern header */}
+    <div style={{padding:"16px 16px 10px",textAlign:"center",flexShrink:0}}>
+      <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"clamp(.85rem,2.5vw,1.1rem)",color:"var(--gold)",letterSpacing:".08em"}}>A Zöld Sárkány Fogadó</div>
+      <div style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",color:"var(--gm)",letterSpacing:".12em",marginTop:3,textTransform:"uppercase"}}>— Válassz játékot —</div>
     </div>
-    <div style={{flex:1,overflowY:"auto"}}>
-      {game==="memory"&&<MemoryGame/>}
-      {game==="reaction"&&<ReactionGame/>}
-      {game==="wordsearch"&&<WordSearch/>}
+    {/* Carousel */}
+    <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:"10px 0",overflow:"hidden"}} onTouchStart={swipeStart} onTouchEnd={swipeEnd} onMouseDown={(e)=>{touchRef.current=e.clientX;}} onMouseUp={(e)=>{if(touchRef.current===null)return;const diff=touchRef.current-e.clientX;if(Math.abs(diff)>50){if(diff>0&&carouselIdx<games.length-1)setCarouselIdx(i=>i+1);else if(diff<0&&carouselIdx>0)setCarouselIdx(i=>i-1);}touchRef.current=null;}}>
+      <div style={{display:"flex",transition:"transform .4s cubic-bezier(.22,1,.36,1)",transform:`translateX(calc(${-carouselIdx} * (min(260px,70vw) + 16px)))`,paddingLeft:"calc(50% - min(130px,35vw))",gap:16}}>
+        {games.map((g,i)=>{
+          const isActive=i===carouselIdx;
+          return <div key={g.id} onClick={()=>isActive&&setActiveGame(g.id)} style={{minWidth:"min(260px,70vw)",maxWidth:280,padding:"28px 20px",background:isActive?"rgba(201,168,76,.06)":"rgba(0,0,0,.2)",border:`1px solid ${isActive?g.color:"rgba(201,168,76,.1)"}`,display:"flex",flexDirection:"column",alignItems:"center",gap:14,cursor:isActive?"pointer":"default",transition:"all .35s",transform:isActive?"scale(1)":"scale(.88)",opacity:isActive?1:.4,boxShadow:isActive?`0 0 30px ${g.color}22`:"none",flexShrink:0}}>
+            <div style={{fontSize:"3rem",filter:isActive?`drop-shadow(0 0 12px ${g.color})`:"grayscale(.6)"}}>{g.icon}</div>
+            <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"clamp(.9rem,2.5vw,1.1rem)",color:isActive?g.color:"var(--gm)",textAlign:"center"}}>{g.label}</div>
+            <div style={{fontStyle:"italic",fontSize:".85rem",color:"var(--td)",textAlign:"center",lineHeight:1.5}}>{g.desc}</div>
+            {isActive&&<button className="btn-nq" style={{marginTop:4}}>Játék Indítása →</button>}
+          </div>;
+        })}
+      </div>
+    </div>
+    {/* Dots */}
+    <div style={{display:"flex",justifyContent:"center",gap:8,padding:"10px 0 16px",flexShrink:0}}>
+      {games.map((g,i)=><button key={i} onClick={()=>setCarouselIdx(i)} style={{width:i===carouselIdx?20:8,height:8,borderRadius:4,background:i===carouselIdx?g.color:"rgba(201,168,76,.15)",border:"none",cursor:"pointer",transition:"all .3s"}}/>)}
     </div>
   </div>;
 }
@@ -769,6 +1014,9 @@ function ProfileTab({user,completed,scores,onInviteFriend}){
   const [dailyDone,setDailyDone]=useState(()=>JSON.parse(localStorage.getItem("hobbit_daily_"+todayKey)||"[]"));
   const dailyChallenge=DAILY_CHALLENGES[new Date().getDay()%DAILY_CHALLENGES.length];
   const myName=user?.adventureName;
+  // Countdown timer
+  const [countdown,setCountdown]=useState("");
+  useEffect(()=>{const tick=()=>{const now=new Date();const tom=new Date(now);tom.setHours(24,0,0,0);const diff=tom-now;const h=String(Math.floor(diff/3600000)).padStart(2,"0");const m=String(Math.floor((diff%3600000)/60000)).padStart(2,"0");const s=String(Math.floor((diff%60000)/1000)).padStart(2,"0");setCountdown(`${h}:${m}:${s}`);};tick();const id=setInterval(tick,1000);return()=>clearInterval(id);},[]);
 
   // Firebase imports
   const { initializeApp:fbInit, getApps } = window.__fbModules||{};
@@ -799,16 +1047,16 @@ function ProfileTab({user,completed,scores,onInviteFriend}){
   },[myName,totalScore]);
 
   const achivs=[
-    {icon:"🗡️",name:"Első Vér",desc:"1 feladat",done:completed.length>=1},
-    {icon:"🏔️",name:"Hegymászó",desc:"5 feladat",done:completed.length>=5},
-    {icon:"💍",name:"Gyűrű Hordozó",desc:"10 feladat",done:completed.length>=10},
-    {icon:"🐉",name:"Sárkányölő",desc:"Mind a 15",done:completed.length>=15},
-    {icon:"⭐",name:"Ezer Pont",desc:"1000 pont",done:totalScore>=1000},
-    {icon:"✨",name:"Arany Rang",desc:"2000 pont",done:totalScore>=2000},
-    {icon:"🧙",name:"Varázsló Barát",desc:"1 barát",done:friends.length>=1},
-    {icon:"🤝",name:"Szövetségkötő",desc:"3 barát",done:friends.length>=3},
+    {icon:"🗡️",name:"Első Vér",desc:"1 feladat",done:completed.length>=1,progress:{current:Math.min(completed.length,1),target:1}},
+    {icon:"🏔️",name:"Hegymászó",desc:"5 feladat",done:completed.length>=5,progress:{current:Math.min(completed.length,5),target:5}},
+    {icon:"💍",name:"Gyűrű Hordozó",desc:"10 feladat",done:completed.length>=10,progress:{current:Math.min(completed.length,10),target:10}},
+    {icon:"🐉",name:"Sárkányölő",desc:"Mind a 15",done:completed.length>=15,progress:{current:Math.min(completed.length,15),target:15}},
+    {icon:"⭐",name:"Ezer Pont",desc:"1000 pont",done:totalScore>=1000,progress:{current:Math.min(totalScore,1000),target:1000}},
+    {icon:"✨",name:"Arany Rang",desc:"2000 pont",done:totalScore>=2000,progress:{current:Math.min(totalScore,2000),target:2000}},
+    {icon:"🧙",name:"Varázsló Barát",desc:"1 barát",done:friends.length>=1,progress:{current:Math.min(friends.length,1),target:1}},
+    {icon:"🤝",name:"Szövetségkötő",desc:"3 barát",done:friends.length>=3,progress:{current:Math.min(friends.length,3),target:3}},
     {icon:"⚡",name:"Villámgyors",desc:"Napi kihívás",done:dailyDone.length>0},
-    {icon:"🌟",name:"Legendás",desc:"2500 pont",done:totalScore>=2500},
+    {icon:"🌟",name:"Legendás",desc:"2500 pont",done:totalScore>=2500,progress:{current:Math.min(totalScore,2500),target:2500}},
   ];
 
   const saveBio=()=>{localStorage.setItem("hobbit_bio",bioEdit);setBio(bioEdit);const cu=JSON.parse(localStorage.getItem("hobbit_current")||"{}");cu.race=selectedRace;localStorage.setItem("hobbit_current",JSON.stringify(cu));setEditMode(false);};
@@ -884,14 +1132,17 @@ function ProfileTab({user,completed,scores,onInviteFriend}){
     <div style={{padding:"16px 16px 12px",background:"linear-gradient(180deg,rgba(201,168,76,.06),transparent)",borderBottom:"1px solid rgba(201,168,76,.1)"}}>
       <div style={{display:"flex",gap:12,alignItems:"center"}}>
         <div style={{position:"relative",flexShrink:0}}>
-          <div style={{width:56,height:56,borderRadius:"50%",border:`2px solid ${race.color}`,background:`radial-gradient(circle,${race.color}33,rgba(0,0,0,.8))`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.6rem",boxShadow:`0 0 18px ${race.color}44`}}>{race.icon}</div>
-          <button onClick={()=>{setEditMode(true);setBioEdit(bio);setSelectedRace(user?.race||"human");}} style={{position:"absolute",bottom:-2,right:-2,width:20,height:20,borderRadius:"50%",background:"rgba(201,168,76,.15)",border:"1px solid rgba(201,168,76,.4)",color:"var(--gold)",fontSize:".6rem",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>✏️</button>
+          <div className="avatar-glow" style={{width:56,height:56,borderRadius:"50%",border:`2px solid ${race.color}`,background:`radial-gradient(circle,${race.color}33,rgba(0,0,0,.8))`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.6rem",boxShadow:`0 0 18px ${race.color}44`,animation:"avatarPulse 3s ease-in-out infinite","--rc":race.color}}>{race.icon}</div>
+          <button aria-label="Profil szerkesztése" onClick={()=>{setEditMode(true);setBioEdit(bio);setSelectedRace(user?.race||"human");}} style={{position:"absolute",bottom:-2,right:-2,width:20,height:20,borderRadius:"50%",background:"rgba(201,168,76,.15)",border:"1px solid rgba(201,168,76,.4)",color:"var(--gold)",fontSize:".6rem",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>✏️</button>
         </div>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"clamp(.85rem,2.5vw,1.1rem)",color:"var(--gold)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user?.adventureName||"Ismeretlen"}</div>
-          <div style={{fontFamily:"'Cinzel',serif",fontSize:".6rem",color:race.color,letterSpacing:".08em",textTransform:"uppercase",marginTop:1}}>{race.id} · <span style={{color:rank.color}}>{rank.label}</span></div>
-          {bio&&<div style={{fontStyle:"italic",fontSize:".75rem",color:"var(--td)",marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{bio}</div>}
-          <div style={{marginTop:6,height:3,background:"rgba(255,255,255,.05)",borderRadius:2,overflow:"hidden"}}><div style={{height:"100%",width:`${pct}%`,background:`linear-gradient(90deg,${race.color}88,var(--gold))`,transition:"width 1s",borderRadius:2}}/></div>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginTop:2}}>
+            <span style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",color:race.color,letterSpacing:".06em",textTransform:"uppercase"}}>{race.id}</span>
+            <span style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:rank.color,background:`${rank.color}15`,border:`1px solid ${rank.color}33`,borderRadius:12,padding:"1px 8px",letterSpacing:".05em",whiteSpace:"nowrap"}}>{rank.label}</span>
+          </div>
+          <div style={{fontStyle:"italic",fontSize:".75rem",color:bio?"var(--td)":"rgba(106,90,64,.4)",marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{bio||"Mesélj magadról..."}</div>
+          <div style={{marginTop:6,height:4,background:"rgba(255,255,255,.05)",borderRadius:2,overflow:"hidden"}}><div style={{height:"100%",width:`${pct}%`,background:`linear-gradient(90deg,${race.color},var(--gold))`,transition:"width 1s",borderRadius:2}}/></div>
           <div style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:"var(--gm)",marginTop:2,letterSpacing:".06em"}}>{completed.length}/{TASKS.length} feladat · {pct}%</div>
         </div>
         <div style={{textAlign:"center",flexShrink:0}}>
@@ -915,8 +1166,8 @@ function ProfileTab({user,completed,scores,onInviteFriend}){
           </div>
         </div>
         <div>
-          <div style={{fontFamily:"'Cinzel',serif",fontSize:".6rem",color:"var(--gm)",letterSpacing:".12em",textTransform:"uppercase",marginBottom:6}}>Bio</div>
-          <textarea value={bioEdit} onChange={e=>setBioEdit(e.target.value)} maxLength={120} placeholder="Rövid bemutatkozás..." style={{width:"100%",background:"rgba(0,0,0,.4)",border:"1px solid rgba(201,168,76,.2)",color:"var(--text)",fontFamily:"'EB Garamond',serif",fontSize:".9rem",padding:"8px 12px",outline:"none",resize:"none",height:70,boxSizing:"border-box"}}/>
+          <div style={{fontFamily:"'Cinzel',serif",fontSize:".6rem",color:"var(--gm)",letterSpacing:".12em",textTransform:"uppercase",marginBottom:6}}>Bemutatkozás</div>
+          <textarea value={bioEdit} onChange={e=>setBioEdit(e.target.value)} maxLength={120} placeholder="Mesélj magadról, kalandor..." style={{width:"100%",background:"rgba(0,0,0,.4)",border:"1px solid rgba(201,168,76,.2)",color:"var(--text)",fontFamily:"'EB Garamond',serif",fontSize:".9rem",padding:"8px 12px",outline:"none",resize:"none",height:70,boxSizing:"border-box"}}/>
           <div style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:"var(--gm)",textAlign:"right"}}>{bioEdit.length}/120</div>
         </div>
         <div style={{display:"flex",gap:8}}>
@@ -927,9 +1178,10 @@ function ProfileTab({user,completed,scores,onInviteFriend}){
     </div>}
 
     {/* Sub tabs */}
-    <div style={{display:"flex",borderBottom:"1px solid rgba(201,168,76,.1)",flexShrink:0}}>
-      {TABS2.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"8px 2px",background:tab===t.id?"rgba(201,168,76,.05)":"transparent",border:"none",borderBottom:`2px solid ${tab===t.id?"var(--gold)":"transparent"}`,color:tab===t.id?"var(--gold)":"var(--gm)",fontFamily:"'Cinzel',serif",fontSize:".55rem",letterSpacing:".06em",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,transition:"all .2s"}}>
+    <div role="tablist" style={{display:"flex",borderBottom:"1px solid rgba(201,168,76,.1)",flexShrink:0}}>
+      {TABS2.map(t=><button key={t.id} role="tab" aria-selected={tab===t.id} onClick={()=>setTab(t.id)} className="profile-subtab" style={{flex:1,padding:"8px 2px",background:"transparent",border:"none",color:tab===t.id?"var(--gold)":"var(--gm)",fontFamily:"'Cinzel',serif",fontSize:".55rem",letterSpacing:".06em",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,transition:"color .3s",position:"relative"}}>
         <span style={{fontSize:".9rem"}}>{t.icon}</span>{t.label}
+        <div style={{position:"absolute",bottom:0,left:"10%",width:tab===t.id?"80%":"0%",height:2,background:"var(--gold)",transition:"width .3s ease",borderRadius:1}}/>
       </button>)}
     </div>
 
@@ -945,11 +1197,13 @@ function ProfileTab({user,completed,scores,onInviteFriend}){
         <div style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",letterSpacing:".14em",color:"var(--gm)",textTransform:"uppercase",marginBottom:10}}>— Pontok feladatonként —</div>
         <BarChart color={race.color} data={TASKS.map(t=>({label:t.num,val:scores[t.id]||0}))}/>
       </div>
-      <div style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",letterSpacing:".16em",color:"var(--gm)",textTransform:"uppercase"}}>— Jelvények ({achivs.filter(a=>a.done).length}/{achivs.length}) —</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
-        {achivs.map(a=><div key={a.name} style={{padding:"8px 10px",background:a.done?"rgba(201,168,76,.06)":"rgba(0,0,0,.15)",border:`1px solid ${a.done?"rgba(201,168,76,.25)":"rgba(255,255,255,.04)"}`,display:"flex",alignItems:"center",gap:8,opacity:a.done?1:.4}}>
-          <span style={{fontSize:"1.2rem",filter:a.done?"none":"grayscale(1)",flexShrink:0}}>{a.icon}</span>
-          <div><div style={{fontFamily:"'Cinzel',serif",fontSize:".62rem",color:a.done?"var(--gold)":"var(--gm)"}}>{a.name}</div><div style={{fontFamily:"'EB Garamond',serif",fontSize:".68rem",color:"var(--td)",fontStyle:"italic"}}>{a.desc}</div></div>
+      <div style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",letterSpacing:".16em",color:"var(--gm)",textTransform:"uppercase"}}>{achivs.filter(a=>a.done).length}/{achivs.length} teljesítve</div>
+      <div role="list" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
+        {achivs.map(a=><div role="listitem" key={a.name} style={{padding:"8px 10px",background:a.done?"rgba(201,168,76,.06)":"rgba(0,0,0,.15)",border:`1px solid ${a.done?"rgba(102,187,106,.3)":"rgba(255,255,255,.04)"}`,display:"flex",alignItems:"center",gap:8,opacity:a.done?1:.5,boxShadow:a.done?"0 0 8px rgba(102,187,106,.1)":"none"}}>
+          <span style={{fontSize:"1.2rem",filter:a.done?"none":"grayscale(1) brightness(.5)",flexShrink:0}}>{a.icon}</span>
+          <div style={{flex:1,minWidth:0}}><div style={{fontFamily:"'Cinzel',serif",fontSize:".62rem",color:a.done?"var(--gold)":"var(--gm)"}}>{a.name}</div><div style={{fontFamily:"'EB Garamond',serif",fontSize:".68rem",color:"var(--td)",fontStyle:"italic"}}>{a.desc}</div>
+          {a.progress&&<div style={{marginTop:3,height:2,background:"rgba(255,255,255,.06)",borderRadius:1,overflow:"hidden"}}><div style={{height:"100%",width:`${Math.min((a.progress.current/a.progress.target)*100,100)}%`,background:a.done?"#66BB6A":"var(--gm)",transition:"width .5s",borderRadius:1}}/></div>}
+          </div>
         </div>)}
       </div>
     </div>}
@@ -987,7 +1241,7 @@ function ProfileTab({user,completed,scores,onInviteFriend}){
 
       {/* Friends list */}
       {friends.length===0
-        ?<div style={{textAlign:"center",padding:"24px",opacity:.4}}><div style={{fontSize:"2rem",marginBottom:8}}>🤝</div><div style={{fontFamily:"'Cinzel',serif",fontSize:".72rem",color:"var(--gm)"}}>Még nincs barátod</div></div>
+        ?<div style={{textAlign:"center",padding:"24px",opacity:.5}}><div style={{fontSize:"2rem",marginBottom:8}}>🤝</div><div style={{fontFamily:"'Cinzel',serif",fontSize:".72rem",color:"var(--gm)"}}>Még nincsenek barátaid. Keress valakit!</div></div>
         :<div style={{display:"flex",flexDirection:"column",gap:7}}>
           <div style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",letterSpacing:".14em",color:"var(--gm)",textTransform:"uppercase"}}>— {friends.length} Szövetséges —</div>
           {[...friends].sort((a,b)=>(b.score||0)-(a.score||0)).map((f,i)=>{
@@ -1009,13 +1263,15 @@ function ProfileTab({user,completed,scores,onInviteFriend}){
     </div>}
 
     {/* LEADERBOARD */}
-    {tab==="leaderboard"&&<div style={{padding:"14px 12px",display:"flex",flexDirection:"column",gap:8}}>
-      <div style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",letterSpacing:".16em",color:"var(--gm)",textTransform:"uppercase",marginBottom:4}}>— Top Kalandorok —</div>
+    {tab==="leaderboard"&&<div role="list" aria-label="Ranglétra" style={{padding:"14px 12px",display:"flex",flexDirection:"column",gap:8}}>
+      <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".72rem",letterSpacing:".1em",color:"var(--gold)",textAlign:"center",marginBottom:4}}>Középföldé Ranglétrálja</div>
       {leaderboard.map((p,i)=>{
         const pr=RACES.find(r=>r.id===p.race)||RACES[3];
         const pr_rank=getRank(p.score);
         const medal=i===0?"🥇":i===1?"🥈":i===2?"🥉":null;
-        return <div key={p.name+i} style={{display:"flex",alignItems:"center",gap:9,padding:"9px 10px",background:p.isMe?"rgba(201,168,76,.07)":"rgba(255,255,255,.02)",border:`1px solid ${p.isMe?"rgba(201,168,76,.3)":"rgba(201,168,76,.07)"}`,boxShadow:p.isMe?"0 0 14px rgba(201,168,76,.1)":"none"}}>
+        const medalBg=i===0?"rgba(255,215,0,.06)":i===1?"rgba(192,192,192,.05)":i===2?"rgba(205,127,50,.05)":"transparent";
+        const medalBorder=i===0?"rgba(255,215,0,.25)":i===1?"rgba(192,192,192,.2)":i===2?"rgba(205,127,50,.2)":p.isMe?"rgba(201,168,76,.3)":"rgba(201,168,76,.07)";
+        return <div key={p.name+i} style={{display:"flex",alignItems:"center",gap:9,padding:"9px 10px",background:p.isMe?`linear-gradient(90deg,${pr.color}12,rgba(201,168,76,.07))`:medalBg||(i%2===1?"rgba(255,255,255,.015)":"transparent"),border:`1px solid ${medalBorder}`,boxShadow:p.isMe?`0 0 14px ${pr.color}22`:"none",position:p.isMe?"sticky":"static",bottom:p.isMe?0:"auto",zIndex:p.isMe?2:1}}>
           <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".75rem",color:i<3?"var(--gold)":"var(--gm)",minWidth:22,textAlign:"center"}}>{medal||`${i+1}.`}</div>
           <div style={{width:32,height:32,borderRadius:"50%",border:`1.5px solid ${pr.color}`,background:`radial-gradient(circle,${pr.color}22,transparent)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:".9rem",flexShrink:0}}>{pr.icon}</div>
           <div style={{flex:1,minWidth:0}}>
@@ -1033,19 +1289,22 @@ function ProfileTab({user,completed,scores,onInviteFriend}){
     {/* DAILY */}
     {tab==="daily"&&<div style={{padding:"14px 12px",display:"flex",flexDirection:"column",gap:12}}>
       <div style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",letterSpacing:".16em",color:"var(--gm)",textTransform:"uppercase"}}>— Mai Napi Kihívás —</div>
-      <div style={{padding:"16px",background:isDailyClaimed?"rgba(102,187,106,.06)":"rgba(201,168,76,.04)",border:`1px solid ${isDailyClaimed?"rgba(102,187,106,.3)":"rgba(201,168,76,.18)"}`,display:"flex",flexDirection:"column",gap:12}}>
+      <div style={{padding:"16px",background:isDailyClaimed?"rgba(102,187,106,.06)":`linear-gradient(135deg,rgba(201,168,76,.05),rgba(201,168,76,.02))`,border:`1px solid ${isDailyClaimed?"rgba(102,187,106,.3)":"rgba(201,168,76,.18)"}`,display:"flex",flexDirection:"column",gap:12}}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
           <span style={{fontSize:"2rem"}}>{dailyChallenge.icon}</span>
           <div style={{flex:1}}>
             <div style={{fontFamily:"'Cinzel',serif",fontSize:".78rem",color:isDailyClaimed?"#66BB6A":"var(--text)"}}>{dailyChallenge.task}</div>
             <div style={{fontFamily:"'Cinzel',serif",fontSize:".6rem",color:"var(--gm)",marginTop:3}}>Jutalom: <span style={{color:"var(--gold)"}}>+{dailyChallenge.pts} pont</span></div>
           </div>
+          {isDailyClaimed&&<span style={{fontSize:"1.4rem"}}>✅</span>}
         </div>
         {isDailyClaimed
           ?<div style={{textAlign:"center",fontFamily:"'Cinzel',serif",fontSize:".75rem",color:"#66BB6A"}}>✓ Teljesítve! Gyere vissza holnap!</div>
           :<button onClick={claimDaily} style={{padding:"10px",background:"rgba(201,168,76,.1)",border:"1px solid rgba(201,168,76,.35)",color:"var(--gold)",fontFamily:"'Cinzel',serif",fontSize:".72rem",letterSpacing:".12em",cursor:"pointer",textTransform:"uppercase"}}>Teljesítettem ✓</button>
         }
       </div>
+      {/* Countdown */}
+      <div style={{textAlign:"center",fontFamily:"'Cinzel',serif",fontSize:".62rem",color:"var(--gold)",letterSpacing:".1em"}}>Következő kihívás: <span style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".72rem"}}>{countdown}</span></div>
       <div style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",letterSpacing:".14em",color:"var(--gm)",textTransform:"uppercase"}}>— Heti Kihívások —</div>
       {DAILY_CHALLENGES.map((c,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",background:"rgba(0,0,0,.15)",border:"1px solid rgba(201,168,76,.07)",opacity:i===new Date().getDay()%DAILY_CHALLENGES.length?1:.5}}>
         <span style={{fontSize:"1.1rem"}}>{c.icon}</span>
@@ -1179,4 +1438,17 @@ body{background:var(--bg);}
 
 .prophecy-opt{display:flex;align-items:center;padding:12px 16px;background:rgba(122,74,187,.04);border:1px solid rgba(122,74,187,.18);color:var(--text);font-family:'EB Garamond',serif;font-size:.97rem;cursor:pointer;transition:all .2s;text-align:left;line-height:1.5;}
 .prophecy-opt:hover{border-color:rgba(122,74,187,.48);background:rgba(122,74,187,.09);transform:translateX(4px);}
+
+@keyframes avatarPulse{0%,100%{box-shadow:0 0 18px var(--rc,rgba(201,168,76,.27))}50%{box-shadow:0 0 30px var(--rc,rgba(201,168,76,.45)),0 0 60px var(--rc,rgba(201,168,76,.15))}}
+.avatar-glow{animation:avatarPulse 3s ease-in-out infinite;}
+.map-parchment{border-radius:3px;overflow:hidden;}
+@keyframes mapSparkle{0%,100%{opacity:.08}50%{opacity:.2}}
+.map-sparkle{animation:mapSparkle 2.5s ease-in-out infinite;}
+.profile-subtab::after{content:'';position:absolute;bottom:0;left:10%;width:0;height:2px;background:var(--gold);transition:width .3s ease;}
+.profile-subtab[aria-selected="true"]::after{width:80%;}
+
+@media(prefers-reduced-motion:reduce){
+.avatar-glow{animation:none!important;}
+.profile-subtab::after{transition:none!important;}
+}
 `;

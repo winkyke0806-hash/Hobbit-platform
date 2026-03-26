@@ -27,6 +27,10 @@ const CSS=`
 @keyframes fogMove{0%,100%{transform:translateX(0)}50%{transform:translateX(6px)}}
 @keyframes starBlink{0%,100%{opacity:.1}50%{opacity:.85}}
 @keyframes coinSpin{0%{transform:rotateY(0deg)}100%{transform:rotateY(360deg)}}
+@keyframes rareLegendaryPulse{0%,100%{box-shadow:0 0 8px rgba(255,215,0,.25),0 4px 18px rgba(0,0,0,.5)}50%{box-shadow:0 0 22px rgba(255,215,0,.55),0 4px 28px rgba(0,0,0,.6)}}
+@keyframes rareEpicPulse{0%,100%{box-shadow:0 0 6px rgba(155,105,189,.2),0 4px 18px rgba(0,0,0,.5)}50%{box-shadow:0 0 18px rgba(155,105,189,.45),0 4px 24px rgba(0,0,0,.6)}}
+@keyframes diceGlowPulse{0%,100%{filter:drop-shadow(0 0 18px rgba(201,168,76,.6)) drop-shadow(0 0 36px rgba(201,168,76,.3))}50%{filter:drop-shadow(0 0 38px rgba(255,215,0,.9)) drop-shadow(0 0 70px rgba(201,168,76,.5))}}
+@keyframes tokenFloat{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-2px) scale(1.05)}}
 .btn{position:relative;overflow:hidden;cursor:pointer;transition:transform .2s,box-shadow .2s;outline:none}
 .btn::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(201,168,76,.16),transparent);transform:translateX(-110%);transition:transform .4s}
 .btn:hover::after{transform:translateX(110%)}
@@ -202,7 +206,7 @@ function Dice3D({value=1,rolling=false,size=52}){
     raf.current=requestAnimationFrame(frame);
     return()=>cancelAnimationFrame(raf.current);
   },[value,rolling,size]);
-  return <canvas ref={cvs} style={{width:size,height:size,display:"block",filter:rolling?"drop-shadow(0 0 12px rgba(201,168,76,.8))":"drop-shadow(0 0 4px rgba(0,0,0,.9))"}}/>;
+  return <canvas ref={cvs} style={{width:size,height:size,display:"block",filter:rolling?"drop-shadow(0 0 14px rgba(255,200,80,.9)) drop-shadow(0 0 28px rgba(201,168,76,.5))":"drop-shadow(0 0 6px rgba(201,168,76,.5)) drop-shadow(0 0 2px rgba(0,0,0,.9))",transition:"filter .3s ease"}}/>;
 }
 
 function Burst({x,y,color="#C9A84C",onDone}){
@@ -323,11 +327,13 @@ function ShopModal({coins,ownedCards,onBuy,onClose}){
   };
   return <div style={{position:"fixed",inset:0,zIndex:650,background:"rgba(1,1,0,.96)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,animation:"zI .22s ease"}}>
     <div style={{position:"absolute",inset:0,background:"radial-gradient(circle at 50% 40%,rgba(180,130,0,.2),transparent 65%)",pointerEvents:"none"}}/>
-    <div style={{width:"100%",maxWidth:520,background:"linear-gradient(170deg,rgba(18,13,4,.99),rgba(5,4,1,.99))",border:"1px solid rgba(201,168,76,.35)",padding:"24px 20px",display:"flex",flexDirection:"column",gap:14,maxHeight:"88vh",position:"relative",animation:"sU .25s ease",boxShadow:"0 0 80px rgba(201,168,76,.12)"}}>
+    <div style={{width:"100%",maxWidth:520,background:"linear-gradient(170deg,rgba(22,16,7,.99),rgba(8,6,2,.99))",border:"1px solid rgba(201,168,76,.35)",padding:"24px 20px",display:"flex",flexDirection:"column",gap:14,maxHeight:"88vh",position:"relative",animation:"sU .25s ease",boxShadow:"0 0 80px rgba(201,168,76,.15), inset 0 1px 0 rgba(201,168,76,.1), inset 0 0 60px rgba(139,90,43,.06)"}}>
+      {/* Parchment corner decorations */}
+      {[["top","left"],["top","right"],["bottom","left"],["bottom","right"]].map(([v,h])=><div key={v+h} style={{position:"absolute",[v]:6,[h]:6,width:16,height:16,borderTop:v==="top"?`1px solid rgba(201,168,76,.4)`:"none",borderBottom:v==="bottom"?`1px solid rgba(201,168,76,.4)`:"none",borderLeft:h==="left"?`1px solid rgba(201,168,76,.4)`:"none",borderRight:h==="right"?`1px solid rgba(201,168,76,.4)`:"none",pointerEvents:"none"}}/>)}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div>
-          <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.1rem",color:"var(--gold)",animation:"gP 2.5s ease infinite"}}>⚔️ Tóváros Piac</div>
-          <div style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",color:"var(--dim)",letterSpacing:".12em",textTransform:"uppercase",marginTop:3}}>Epikus tárgyak vásárolhatók pontokért</div>
+          <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.1rem",color:"var(--gold)",animation:"gP 2.5s ease infinite"}}>⚒️ Thorin Boltja</div>
+          <div style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",color:"var(--dim)",letterSpacing:".12em",textTransform:"uppercase",marginTop:3}}>Legendás tárgyak vásárolhatók aranyért</div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".9rem",color:"var(--gold)"}}>🪙 {coins}</div>
@@ -340,17 +346,24 @@ function ShopModal({coins,ownedCards,onBuy,onClose}){
           const owned=(ownedCards||[]).includes(item.id);
           const canAfford=coins>=item.price;
           const rarCol=RARITY_COL[item.rarity]||"var(--muted)";
-          return <div key={item.id} className="shopItem" style={{background:`rgba(${item.rarity==="legendary"?"80,60,0":item.rarity==="epic"?"40,20,80":item.rarity==="rare"?"10,35,70":"20,18,14"},.5)`,border:`1px solid ${rarCol}35`,padding:"14px 12px",display:"flex",flexDirection:"column",gap:8,opacity:owned?0.55:1,boxShadow:owned?"none":`0 4px 18px rgba(0,0,0,.5)`}}>
+          const rarBg={legendary:"rgba(80,60,0,.55)",epic:"rgba(40,20,80,.55)",rare:"rgba(10,35,70,.55)",common:"rgba(20,18,14,.5)"};
+          const rarAnim={legendary:"rareLegendaryPulse 2.5s ease-in-out infinite",epic:"rareEpicPulse 2.8s ease-in-out infinite",rare:"none",common:"none"};
+          const ownedStyle=owned?{border:`1px solid rgba(102,187,106,.45)`,background:"rgba(20,40,20,.4)"}:{};
+          const rarityLabel={legendary:"⭐ Legendás",epic:"💜 Epikus",rare:"🔷 Ritka",common:"⬜ Közönséges"};
+          return <div key={item.id} className="shopItem" style={{position:"relative",background:rarBg[item.rarity]||rarBg.common,border:`1.5px solid ${owned?"rgba(102,187,106,.5)":rarCol+"55"}`,padding:"14px 12px",display:"flex",flexDirection:"column",gap:8,opacity:owned?0.7:canAfford?1:0.75,animation:owned||!canAfford?"none":rarAnim[item.rarity],...ownedStyle}}>
+            {/* Rarity top bar */}
+            <div style={{position:"absolute",top:0,left:0,right:0,height:"2px",background:`linear-gradient(90deg,transparent,${rarCol},transparent)`,opacity:owned?0.5:0.9,borderRadius:"4px 4px 0 0"}}/>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <span style={{fontSize:"1.6rem",filter:`drop-shadow(0 0 8px ${rarCol}60)`}}>{item.icon}</span>
+              <span style={{fontSize:"1.6rem",filter:`drop-shadow(0 0 10px ${rarCol}88)`}}>{item.icon}</span>
               <div style={{flex:1}}>
-                <div style={{fontFamily:"'Cinzel',serif",fontSize:".68rem",color:"var(--text)",fontWeight:"bold"}}>{item.name}</div>
-                <div style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:rarCol,textTransform:"uppercase",letterSpacing:".08em"}}>{item.rarity}</div>
+                <div style={{fontFamily:"'Cinzel',serif",fontSize:".68rem",color:owned?"#66BB6A":"var(--text)",fontWeight:"bold"}}>{item.name}</div>
+                <div style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:rarCol,textTransform:"uppercase",letterSpacing:".08em"}}>{rarityLabel[item.rarity]||item.rarity}</div>
               </div>
+              {owned&&<span style={{fontFamily:"'Cinzel',serif",fontSize:".46rem",color:"#66BB6A",border:"1px solid rgba(102,187,106,.4)",padding:"2px 5px",background:"rgba(20,40,20,.5)",whiteSpace:"nowrap"}}>✓ Megvan</span>}
             </div>
             <div style={{fontFamily:"'EB Garamond',serif",fontSize:".82rem",color:"var(--muted)",fontStyle:"italic",lineHeight:1.5}}>{item.desc}</div>
-            <button className="btn" onClick={()=>!owned&&buy(item)} style={{padding:"7px",background:owned?"rgba(0,0,0,.2)":canAfford?`rgba(${item.rarity==="legendary"?"100,80,0":item.rarity==="epic"?"60,30,100":"0,60,100"},.18)`:"rgba(0,0,0,.2)",border:`1px solid ${owned?"rgba(255,255,255,.08)":canAfford?rarCol+"55":"rgba(255,255,255,.08)"}`,color:owned?"var(--dim)":canAfford?rarCol:"var(--dim)",fontFamily:"'Cinzel',serif",fontSize:".62rem",cursor:owned||!canAfford?"default":"pointer",textTransform:"uppercase",letterSpacing:".08em"}}>
-              {owned?"✓ Megvan":"🪙 "+item.price+" pont"}
+            <button className="btn" onClick={()=>!owned&&buy(item)} style={{padding:"7px",background:owned?"rgba(0,0,0,.15)":canAfford?`rgba(${item.rarity==="legendary"?"100,80,0":item.rarity==="epic"?"60,30,100":item.rarity==="rare"?"10,50,100":"0,0,0"},.22)`:"rgba(0,0,0,.2)",border:`1px solid ${owned?"rgba(102,187,106,.3)":canAfford?rarCol+"66":"rgba(255,255,255,.08)"}`,color:owned?"#66BB6A":canAfford?rarCol:item.rarity==="rare"||item.rarity==="epic"||item.rarity==="legendary"?"rgba(180,180,180,.4)":"var(--dim)",fontFamily:"'Cinzel',serif",fontSize:".62rem",cursor:owned||!canAfford?"default":"pointer",textTransform:"uppercase",letterSpacing:".08em",boxShadow:!owned&&canAfford?`0 0 10px ${rarCol}22`:"none"}}>
+              {owned?"✓ Birtokolod":canAfford?"🪙 "+item.price+" arany":"🔒 "+item.price+" arany szükséges"}
             </button>
           </div>;
         })}
@@ -377,7 +390,7 @@ function CenterDiceOverlay({data}){
       {playerName} dob...
     </div>
     {/* THE BIG DICE */}
-    <div style={{animation:rolling?"none":"popIn .4s cubic-bezier(.4,0,.2,1)",filter:`drop-shadow(0 0 ${rolling?20:40}px rgba(201,168,76,${rolling?.4:.7})) drop-shadow(0 0 ${rolling?40:80}px rgba(201,168,76,${rolling?.2:.35}))`}}>
+    <div style={{animation:rolling?"diceGlowPulse 0.6s ease-in-out infinite":"popIn .4s cubic-bezier(.4,0,.2,1)",filter:rolling?"drop-shadow(0 0 28px rgba(255,200,50,.85)) drop-shadow(0 0 60px rgba(201,168,76,.5)) drop-shadow(0 0 100px rgba(201,168,76,.2))":"drop-shadow(0 0 42px rgba(255,215,0,.75)) drop-shadow(0 0 80px rgba(201,168,76,.4))"}}>
       <Dice3D value={value} rolling={rolling} size={160}/>
     </div>
     {/* Result text - only when settled */}
@@ -422,7 +435,9 @@ function EpicBoard({players,myPos,onFieldClick}){
 
   return <svg viewBox="0 0 120 90" style={{width:"100%",height:"100%",display:"block"}} preserveAspectRatio="xMidYMid meet">
     <defs>
-      <radialGradient id="bG" cx="30%" cy="70%" r="80%"><stop offset="0%" stopColor="#1c1408"/><stop offset="55%" stopColor="#100c04"/><stop offset="100%" stopColor="#060401"/></radialGradient>
+      <radialGradient id="bG" cx="30%" cy="70%" r="80%"><stop offset="0%" stopColor="#2a1e0a"/><stop offset="40%" stopColor="#1e1508"/><stop offset="75%" stopColor="#140f05"/><stop offset="100%" stopColor="#0a0702"/></radialGradient>
+      <radialGradient id="parchInner" cx="50%" cy="50%" r="70%"><stop offset="0%" stopColor="rgba(62,50,30,.55)"/><stop offset="100%" stopColor="rgba(10,8,3,0)"/></radialGradient>
+      <filter id="parchNoise" x="0%" y="0%" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch" result="noiseOut"/><feColorMatrix type="saturate" values="0" in="noiseOut" result="grayNoise"/><feBlend in="SourceGraphic" in2="grayNoise" mode="multiply" result="blend"/><feComposite in="blend" in2="SourceGraphic" operator="in"/></filter>
       <filter id="gw" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="1.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
       <filter id="sh"><feDropShadow dx=".3" dy=".5" stdDeviation=".6" floodOpacity=".6"/></filter>
       <filter id="fF" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="1.8" result="b"/><feColorMatrix type="matrix" values="1.2 .4 0 0 0  .3 .08 0 0 0  0 0 0 0 0  0 0 0 1.6 0" in="b" result="fr"/><feMerge><feMergeNode in="fr"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
@@ -430,7 +445,11 @@ function EpicBoard({players,myPos,onFieldClick}){
       <pattern id="dotP" x="0" y="0" width="5" height="5" patternUnits="userSpaceOnUse"><circle cx="2.5" cy="2.5" r=".24" fill="rgba(201,168,76,.04)"/></pattern>
     </defs>
     <rect width="120" height="90" fill="url(#bG)"/>
+    <rect width="120" height="90" fill="url(#parchInner)" opacity=".8"/>
     <rect width="120" height="90" fill="url(#dotP)"/>
+    {/* Parchment vignette edges */}
+    <rect width="120" height="90" fill="none" stroke="rgba(139,90,43,.12)" strokeWidth="8" strokeLocation="inside"/>
+    <rect x="1" y="1" width="118" height="88" fill="none" stroke="rgba(201,168,76,.06)" strokeWidth="0.5"/>
     {/* Stars */}
     {[[8,5],[18,7],[32,3],[48,2],[62,5],[77,3],[91,6],[105,4],[112,10],[113,22],[4,20],[3,42],[4,62],[113,45],[111,65],[56,7],[38,8],[88,9]].map(([sx,sy],i)=>
       <circle key={i} cx={sx} cy={sy} r=".2" fill="rgba(255,245,200,.75)" style={{animation:`starBlink ${1.4+i*.27}s ${i*.16}s ease-in-out infinite`}}/>)}
@@ -492,12 +511,17 @@ function EpicBoard({players,myPos,onFieldClick}){
         <circle cx={f.x-r*.2} cy={f.y-r*.2} r={r*.46} fill="rgba(255,255,255,.07)"/>
         <text x={f.x} y={f.y+.7} textAnchor="middle" dominantBaseline="middle" fontSize={f.t==="start"||f.t==="finish"?"3.2":spec?"2.25":"2.0"}>{f.e}</text>
         {here.map((p,i)=>{const rc=raceOf(p.race);const ox=(i-(here.length-1)/2)*3.0;const isMe=p.isMe;
-          return <g key={p.name} transform={`translate(${f.x+ox},${f.y-r-2.2})`} style={{animation:isMe?"tF 1.4s ease-in-out infinite":"none"}} filter={isMe?"url(#gw)":"none"}>
-            <ellipse cx=".2" cy="1.6" rx="1.0" ry=".42" fill="rgba(0,0,0,.5)"/>
-            <circle cx="0" cy="0" r="1.35" fill={rc.color} stroke={isMe?"#FFD700":"rgba(0,0,0,.65)"} strokeWidth={isMe?.42:.2}/>
-            <circle cx="-.3" cy="-.3" r=".4" fill="rgba(255,255,255,.28)"/>
+          return <g key={p.name} transform={`translate(${f.x+ox},${f.y-r-2.2})`} style={{animation:isMe?"tF 1.4s ease-in-out infinite":"tokenFloat 3s ease-in-out infinite"}} filter={isMe?"url(#gw)":"url(#sh)"}>
+            {/* Token glow halo */}
+            <circle cx="0" cy="0" r="2.0" fill={rc.color} opacity=".18" filter="url(#gw)"/>
+            <ellipse cx=".2" cy="1.8" rx="1.1" ry=".45" fill="rgba(0,0,0,.55)"/>
+            {/* Token body with race color gradient */}
+            <circle cx="0" cy="0" r="1.5" fill={rc.color} opacity=".35"/>
+            <circle cx="0" cy="0" r="1.35" fill={rc.color} stroke={isMe?"#FFD700":`rgba(${rc.rgb},.9)`} strokeWidth={isMe?.55:.32}/>
+            <circle cx="-.3" cy="-.3" r=".4" fill="rgba(255,255,255,.35)"/>
             <text x="0" y=".4" textAnchor="middle" dominantBaseline="middle" fontSize="1.0">{rc.icon}</text>
-            {isMe&&<circle cx="0" cy="0" r="1.8" fill="none" stroke="rgba(255,215,0,.5)" strokeWidth=".28" style={{animation:"rp 2s ease-out infinite"}}/>}
+            {isMe&&<circle cx="0" cy="0" r="1.8" fill="none" stroke="rgba(255,215,0,.55)" strokeWidth=".32" style={{animation:"rp 2s ease-out infinite"}}/>}
+            {isMe&&<circle cx="0" cy="0" r="2.4" fill="none" stroke={`rgba(${rc.rgb},.28)`} strokeWidth=".22" style={{animation:"rp 2s .5s ease-out infinite"}}/>}
           </g>;
         })}
       </g>;
@@ -533,9 +557,9 @@ function PanelHeader({title,sub}){
 // ═══ LOBBY / WAITING / FINISHED ════════════════════════════════════════════════
 function LobbyScreen({pid,user,friends,invites,onCreateGame,onJoinGame,onAcceptInvite,onDeclineInvite,onInviteFriend,notif}){
   const [code,setCode]=useState("");const race=raceOf(user?.race);
-  return <div style={{position:"fixed",inset:0,background:"radial-gradient(circle at 30% 40%,rgba(40,28,10,.7),rgba(3,2,1,1) 70%)",display:"flex",alignItems:"center",justifyContent:"center",padding:24,zIndex:10}}>
+  return <div style={{position:"fixed",inset:0,background:"radial-gradient(ellipse at 30% 40%,rgba(62,44,14,.6),rgba(3,2,1,1) 70%)",display:"flex",alignItems:"center",justifyContent:"center",padding:24,zIndex:10}}>
     <style>{CSS}</style><Notif n={notif}/>
-    <div style={{width:"100%",maxWidth:500,background:"linear-gradient(180deg,rgba(12,9,5,.98),rgba(6,4,2,.99))",border:"1px solid var(--border)",padding:"30px 26px",display:"flex",flexDirection:"column",gap:16,borderRadius:3,boxShadow:"0 0 80px rgba(0,0,0,.9)",animation:"zI .3s ease"}}>
+    <div style={{width:"100%",maxWidth:500,background:"linear-gradient(170deg,rgba(22,16,7,.98),rgba(8,6,2,.99))",border:"1px solid rgba(201,168,76,.22)",padding:"30px 26px",display:"flex",flexDirection:"column",gap:16,borderRadius:3,boxShadow:"0 0 80px rgba(0,0,0,.9), 0 0 40px rgba(139,90,43,.08), inset 0 1px 0 rgba(201,168,76,.08)",animation:"zI .3s ease"}}>
       <div style={{textAlign:"center"}}>
         <div style={{fontSize:"2.8rem",marginBottom:8,filter:"drop-shadow(0 0 22px rgba(201,168,76,.6))",animation:"gP 2.5s ease infinite"}}>🎲</div>
         <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"clamp(1rem,3vw,1.5rem)",color:"var(--gold)",animation:"gP 3s ease infinite"}}>Középföld Honfoglalója</div>
@@ -573,9 +597,9 @@ function LobbyScreen({pid,user,friends,invites,onCreateGame,onJoinGame,onAcceptI
 }
 
 function WaitingScreen({gameId,players,gameData,friends,pid,onStart,onInviteFriend,onLeave,notif}){
-  return <div style={{position:"fixed",inset:0,background:"radial-gradient(circle at 50% 40%,rgba(30,20,8,.7),rgba(3,2,1,1) 70%)",display:"flex",alignItems:"center",justifyContent:"center",padding:24,zIndex:10}}>
+  return <div style={{position:"fixed",inset:0,background:"radial-gradient(ellipse at 50% 40%,rgba(50,36,12,.65),rgba(3,2,1,1) 70%)",display:"flex",alignItems:"center",justifyContent:"center",padding:24,zIndex:10}}>
     <style>{CSS}</style><Notif n={notif}/>
-    <div style={{width:"100%",maxWidth:460,background:"linear-gradient(180deg,rgba(12,9,5,.98),rgba(6,4,2,.99))",border:"1px solid var(--border)",padding:"30px 26px",display:"flex",flexDirection:"column",gap:14,borderRadius:3,boxShadow:"0 0 80px rgba(0,0,0,.9)",animation:"zI .3s ease"}}>
+    <div style={{width:"100%",maxWidth:460,background:"linear-gradient(170deg,rgba(22,16,7,.98),rgba(8,6,2,.99))",border:"1px solid rgba(201,168,76,.22)",padding:"30px 26px",display:"flex",flexDirection:"column",gap:14,borderRadius:3,boxShadow:"0 0 80px rgba(0,0,0,.9), 0 0 40px rgba(139,90,43,.08), inset 0 1px 0 rgba(201,168,76,.08)",animation:"zI .3s ease"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
         <div>
           <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.1rem",color:"var(--gold)",animation:"gP 2.5s ease infinite"}}>Váróterem</div>
@@ -610,9 +634,9 @@ function WaitingScreen({gameId,players,gameData,friends,pid,onStart,onInviteFrie
 }
 
 function FinishedScreen({players,gameData,pid,onNewGame}){
-  return <div style={{position:"fixed",inset:0,background:"radial-gradient(circle at 50% 40%,rgba(100,70,0,.3),rgba(3,2,1,1) 65%)",display:"flex",alignItems:"center",justifyContent:"center",padding:24,zIndex:10}}>
+  return <div style={{position:"fixed",inset:0,background:"radial-gradient(ellipse at 50% 40%,rgba(80,60,8,.35),rgba(3,2,1,1) 65%)",display:"flex",alignItems:"center",justifyContent:"center",padding:24,zIndex:10}}>
     <style>{CSS}</style>
-    <div style={{width:"100%",maxWidth:420,background:"linear-gradient(180deg,rgba(12,9,5,.98),rgba(6,4,2,.99))",border:"1px solid var(--border)",padding:"34px 26px",display:"flex",flexDirection:"column",alignItems:"center",gap:18,borderRadius:3,boxShadow:"0 0 100px rgba(0,0,0,.95)",animation:"zI .35s ease"}}>
+    <div style={{width:"100%",maxWidth:420,background:"linear-gradient(170deg,rgba(22,16,7,.98),rgba(8,6,2,.99))",border:"1px solid rgba(201,168,76,.25)",padding:"34px 26px",display:"flex",flexDirection:"column",alignItems:"center",gap:18,borderRadius:3,boxShadow:"0 0 100px rgba(0,0,0,.95), 0 0 50px rgba(139,90,43,.1), inset 0 1px 0 rgba(201,168,76,.1)",animation:"zI .35s ease"}}>
       <div style={{fontSize:"4.5rem",animation:"wB .6s ease",filter:`drop-shadow(0 0 38px ${gameData?.winner===pid?"rgba(255,215,0,.8)":"rgba(229,57,53,.6)"})`}}>{gameData?.winner===pid?"🏆":"😔"}</div>
       <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.4rem",color:"var(--gold)",animation:"gP 2s ease infinite",textAlign:"center"}}>{gameData?.winner===pid?"GYŐZELEM!":"Jó próbálkozás!"}</div>
       <div style={{display:"flex",flexDirection:"column",gap:7,width:"100%",maxWidth:320}}>
@@ -653,7 +677,7 @@ function PlayingScreen({gd,pid,user,gameId,onRoll,onEventResult,eventField,rolli
     </div>}
 
     {/* LEFT PANEL */}
-    <div className="sc" style={{width:212,flexShrink:0,display:"flex",flexDirection:"column",background:"linear-gradient(180deg,rgba(10,8,4,.98),rgba(5,4,2,.99))",borderRight:"1px solid var(--border)",overflowY:"auto"}}>
+    <div className="sc" style={{width:212,flexShrink:0,display:"flex",flexDirection:"column",background:"linear-gradient(180deg,rgba(14,10,5,.98),rgba(7,5,2,.99))",borderRight:"1px solid rgba(201,168,76,.12)",overflowY:"auto",boxShadow:"inset -1px 0 20px rgba(0,0,0,.4)"}}>
       <PanelHeader title="Középföld" sub={`Kör: ${gd?.turnCount||0}`}/>
       {players.map(p=>{
         const pr=raceOf(p.race);const active=gd?.currentTurn===p.name;
@@ -681,12 +705,12 @@ function PlayingScreen({gd,pid,user,gameId,onRoll,onEventResult,eventField,rolli
     </div>
 
     {/* CENTER: Board */}
-    <div style={{flex:1,position:"relative",overflow:"hidden",minWidth:0}}>
+    <div style={{flex:1,position:"relative",overflow:"hidden",minWidth:0,background:"radial-gradient(ellipse at 50% 50%,rgba(62,50,30,.95),rgba(30,22,12,.98))",boxShadow:"inset 0 0 80px rgba(20,14,6,.8)"}}>
       <EpicBoard players={players} myPos={myPos} onFieldClick={f=>setSelField(f===selField?null:f)}/>
     </div>
 
     {/* RIGHT PANEL */}
-    <div className="sc" style={{width:222,flexShrink:0,display:"flex",flexDirection:"column",background:"linear-gradient(180deg,rgba(10,8,4,.98),rgba(5,4,2,.99))",borderLeft:"1px solid var(--border)",overflowY:"auto"}}>
+    <div className="sc" style={{width:222,flexShrink:0,display:"flex",flexDirection:"column",background:"linear-gradient(180deg,rgba(14,10,5,.98),rgba(7,5,2,.99))",borderLeft:"1px solid rgba(201,168,76,.12)",overflowY:"auto",boxShadow:"inset 1px 0 20px rgba(0,0,0,.4)"}}>
       {/* Current field */}
       <div style={{padding:"12px 14px",borderBottom:"1px solid var(--border)",flexShrink:0}}>
         <div style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:"var(--dim)",letterSpacing:".12em",textTransform:"uppercase",marginBottom:6}}>Jelenlegi mező</div>
@@ -707,8 +731,8 @@ function PlayingScreen({gd,pid,user,gameId,onRoll,onEventResult,eventField,rolli
       {/* ROLL */}
       <div style={{padding:"14px",borderBottom:"1px solid var(--border)",flexShrink:0}}>
         <button onClick={onRoll} disabled={!isMyTurn||rolling||!!eventField} className="btn"
-          style={{width:"100%",padding:"18px 0",background:isMyTurn&&!rolling&&!eventField?"linear-gradient(135deg,rgba(201,168,76,.22),rgba(201,168,76,.08),rgba(201,168,76,.18))":"rgba(0,0,0,.22)",border:`2px solid ${isMyTurn&&!rolling&&!eventField?"rgba(201,168,76,.65)":"rgba(255,255,255,.06)"}`,color:isMyTurn&&!rolling&&!eventField?"var(--gold)":"var(--dim)",fontFamily:"'Cinzel Decorative',serif",fontSize:".95rem",letterSpacing:".08em",cursor:isMyTurn&&!rolling&&!eventField?"pointer":"default",boxShadow:isMyTurn&&!rolling&&!eventField?"0 0 32px rgba(201,168,76,.28)":"none",animation:isMyTurn&&!rolling&&!eventField?"aG 2s ease infinite":"none",borderRadius:3,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
-          <span style={{fontSize:"2rem"}}>{rolling?"⏳":"🎲"}</span>
+          style={{width:"100%",padding:"18px 0",background:isMyTurn&&!rolling&&!eventField?"linear-gradient(135deg,rgba(201,168,76,.25),rgba(139,90,43,.12),rgba(201,168,76,.2))":"rgba(0,0,0,.22)",border:`2px solid ${isMyTurn&&!rolling&&!eventField?"rgba(201,168,76,.7)":"rgba(255,255,255,.06)"}`,color:isMyTurn&&!rolling&&!eventField?"var(--gold)":"var(--dim)",fontFamily:"'Cinzel Decorative',serif",fontSize:".95rem",letterSpacing:".08em",cursor:isMyTurn&&!rolling&&!eventField?"pointer":"default",boxShadow:isMyTurn&&!rolling&&!eventField?"0 0 32px rgba(201,168,76,.3), inset 0 1px 0 rgba(255,215,0,.1)":"none",animation:isMyTurn&&!rolling&&!eventField?"aG 2s ease infinite":"none",borderRadius:3,display:"flex",flexDirection:"column",alignItems:"center",gap:4,textShadow:isMyTurn&&!rolling&&!eventField?"0 0 12px rgba(255,215,0,.4)":"none"}}>
+          <span style={{fontSize:"2.2rem",filter:isMyTurn&&!rolling&&!eventField?"drop-shadow(0 0 8px rgba(255,215,0,.6))":"none"}}>{rolling?"⏳":"🎲"}</span>
           <span>{rolling?"Gurulás...":isMyTurn?"Kocka Dobása":"Várakozás..."}</span>
         </button>
       </div>

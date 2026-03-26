@@ -4,6 +4,24 @@
 
 ---
 
+## 2026-03-26 — UI/UX Design complete (5/5 screens)
+
+**Phase:** UI/UX Design
+**Status:** completed
+**What happened:**
+- Full platform UI/UX redesign completed via /blox:design
+- Direction: UX improvement — keep fantasy style, improve animations/layouts
+- Design order (user-specified): Map → MiniGames+BoardGame → Auth → Quest Modal → Profile
+- All 5 designs saved to docs/design/:
+  1. adventure-map.md — Tolkien-style parchment map, 16:9, 5 regions, SVG terrain, fog overlay
+  2. minigames-boardgame.md — Carousel layout ("A Zöld Sárkány Fogadó"), ShopCard rarity borders
+  3. auth-flow.md — Visual refinement (parchment texture, bigger race cards, cinematic gate)
+  4. quest-modal.md — Glass-morphism, RadialTimer, animated score counter, retry button
+  5. profile-tab.md — Compact refinement (rank pill badge, achievement progress, leaderboard medals, countdown timer)
+**Next session task:** Implement designs via /blox:build
+
+---
+
 ## 2026-03-25 — Retrofit complete
 
 **Phase:** Retrofit (Phases 1-4)
