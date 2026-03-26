@@ -272,10 +272,7 @@ function StoryIntro({task,user,onStart}){
       <button
     className="btn-start"
     onClick={() => {
-        onStart(); // eredeti indító logika
-        setTimeout(() => {
-            window.location.reload(); // HARD RELOAD
-        }, 200);
+        onStart();
     }}
     style={{ "--tc": task.color }}
 >

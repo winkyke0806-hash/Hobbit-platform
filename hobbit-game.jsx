@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { initializeApp, getApps } from "firebase/app";
 import { getDatabase, ref, set, get, onValue, update, push, remove, off } from "firebase/database";
 
-const FB={apiKey:"AIzaSyDFvUaUSu_UxF4gkooovxtX-bLq1rRaI2E",authDomain:"hobbit-projekt.firebaseapp.com",projectId:"hobbit-projekt",databaseURL:"https://hobbit-projekt-default-rtdb.europe-west1.firebasedatabase.app"};
+const FB={apiKey:import.meta.env.VITE_FIREBASE_API_KEY,authDomain:import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,projectId:import.meta.env.VITE_FIREBASE_PROJECT_ID,databaseURL:import.meta.env.VITE_FIREBASE_DATABASE_URL};
 const _app=getApps().length?getApps()[0]:initializeApp(FB);
 const db=getDatabase(_app);
 window.__fbDB={getDatabase:()=>db,ref,set,get,onValue,update,push,remove,off};
