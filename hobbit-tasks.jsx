@@ -2176,42 +2176,43 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
           setDropAnim(prev=>prev?{...prev,rarity:next}:null);
           tryUpgrade(next,800);
         }else{
-          // Final rarity determined — start spinning
+          // Final rarity determined — CS2-style carousel spin
           const pool=STAR_REWARDS.filter(r=>r.rarity===STAR_RARITIES[currentRarity].id);
           const finalReward=pool[Math.floor(Math.random()*pool.length)];
-          // Build spin strip: 20 random items + final reward at position 17
+          // Build long strip: 60 items, winning item at index 50
+          const STRIP_LEN=60,WIN_IDX=50,ITEM_W=80;
           const strip=[];
-          for(let i=0;i<20;i++){
-            if(i===17){strip.push(finalReward);}
-            else{const allPool=[...STAR_REWARDS];strip.push(allPool[Math.floor(Math.random()*allPool.length)]);}
+          for(let i=0;i<STRIP_LEN;i++){
+            if(i===WIN_IDX){strip.push(finalReward);}
+            else{strip.push(STAR_REWARDS[Math.floor(Math.random()*STAR_REWARDS.length)]);}
           }
           sfx.dice?.();
-          setDropAnim(prev=>prev?{...prev,phase:"spinning",finalRarity:currentRarity,reward:finalReward,spinItems:strip,spinIdx:0}:null);
-          // Animate spin
-          let idx=0;const totalTicks=17;
-          const spinTick=()=>{
-            idx++;
-            setDropAnim(prev=>prev?{...prev,spinIdx:idx}:null);
-            if(idx<totalTicks){
-              const delay=80+idx*idx*3; // accelerating slowdown
-              setTimeout(spinTick,delay);
-            }else{
-              // Reveal!
-              setTimeout(()=>{
-                sfx.achievement?.();
-                setDropAnim(prev=>prev?{...prev,phase:"reveal"}:null);
-                // Apply reward
-                if(finalReward.type==="pts")onAddScore?.("stardrop_"+Date.now(),finalReward.amount);
-                if(finalReward.type==="elo"){
-                  try{const {getDatabase,ref:fbRef,get:fbGet,set:fbSet}=window.__fbDB||{};if(getDatabase){const db=getDatabase();fbGet(fbRef(db,`users/${myName}/profile/elo`)).then(s=>{const cur=s.val()||1000;fbSet(fbRef(db,`users/${myName}/profile/elo`),cur+finalReward.amount);});}}catch(e){}
-                }
-                const entry={...finalReward,rarityId:STAR_RARITIES[currentRarity].id,time:Date.now()};
-                const hist=[entry,...dropHistory].slice(0,20);
-                setDropHistory(hist);localStorage.setItem("hobbit_drop_history",JSON.stringify(hist));
-              },500);
+          // Start at 0, will animate to final position via CSS transition
+          const jitter=(Math.random()-0.5)*30; // slight random offset so it's not perfectly centered every time
+          const finalPx=WIN_IDX*ITEM_W+jitter;
+          setDropAnim(prev=>prev?{...prev,phase:"spinning",finalRarity:currentRarity,reward:finalReward,spinItems:strip,spinPx:0,finalPx,settled:false}:null);
+          // Trigger transition after paint
+          requestAnimationFrame(()=>{requestAnimationFrame(()=>{
+            setDropAnim(prev=>prev?{...prev,spinPx:finalPx}:null);
+          });});
+          // After spin duration → tick sound + reveal
+          const SPIN_DUR=5500;
+          setTimeout(()=>{
+            setDropAnim(prev=>prev?{...prev,settled:true}:null);
+            sfx.success?.();
+          },SPIN_DUR-300);
+          setTimeout(()=>{
+            sfx.achievement?.();
+            setDropAnim(prev=>prev?{...prev,phase:"reveal"}:null);
+            // Apply reward
+            if(finalReward.type==="pts")onAddScore?.("stardrop_"+Date.now(),finalReward.amount);
+            if(finalReward.type==="elo"){
+              try{const {getDatabase,ref:fbRef,get:fbGet,set:fbSet}=window.__fbDB||{};if(getDatabase){const db=getDatabase();fbGet(fbRef(db,`users/${myName}/profile/elo`)).then(s=>{const cur=s.val()||1000;fbSet(fbRef(db,`users/${myName}/profile/elo`),cur+finalReward.amount);});}}catch(e){}
             }
-          };
-          setTimeout(spinTick,200);
+            const entry={...finalReward,rarityId:STAR_RARITIES[currentRarity].id,time:Date.now()};
+            const hist=[entry,...dropHistory].slice(0,20);
+            setDropHistory(hist);localStorage.setItem("hobbit_drop_history",JSON.stringify(hist));
+          },SPIN_DUR+600);
         }
       },delay);
     };
@@ -3028,20 +3029,28 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
         </>}
         {dropAnim.phase==="spinning"&&<>
           <div style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",color:STAR_RARITIES[dropAnim.finalRarity].color,letterSpacing:".14em",textTransform:"uppercase",marginBottom:10}}>{STAR_RARITIES[dropAnim.finalRarity].name} Zsákmány</div>
-          {/* Spinner strip */}
-          <div style={{overflow:"hidden",height:70,position:"relative",border:`1px solid ${STAR_RARITIES[dropAnim.finalRarity].color}33`,background:"rgba(0,0,0,.4)",borderRadius:4}}>
-            {/* Center indicator */}
-            <div style={{position:"absolute",top:0,bottom:0,left:"50%",transform:"translateX(-50%)",width:60,borderLeft:`2px solid ${STAR_RARITIES[dropAnim.finalRarity].color}`,borderRight:`2px solid ${STAR_RARITIES[dropAnim.finalRarity].color}`,zIndex:2,background:`${STAR_RARITIES[dropAnim.finalRarity].color}08`}}/>
-            <div style={{display:"flex",alignItems:"center",height:"100%",transition:"transform .15s ease-out",transform:`translateX(calc(50% - 30px - ${dropAnim.spinIdx*60}px))`}}>
+          {/* CS2-style carousel */}
+          <div style={{overflow:"hidden",height:90,position:"relative",border:`1px solid ${STAR_RARITIES[dropAnim.finalRarity].color}33`,background:"rgba(0,0,0,.5)",borderRadius:6}}>
+            {/* Center pointer triangle */}
+            <div style={{position:"absolute",top:0,left:"50%",transform:"translateX(-50%)",width:0,height:0,borderLeft:"8px solid transparent",borderRight:"8px solid transparent",borderTop:`10px solid ${STAR_RARITIES[dropAnim.finalRarity].color}`,zIndex:3,filter:`drop-shadow(0 2px 6px ${STAR_RARITIES[dropAnim.finalRarity].glow})`}}/>
+            {/* Center vertical lines */}
+            <div style={{position:"absolute",top:0,bottom:0,left:"50%",transform:"translateX(-50%)",width:80,borderLeft:`2px solid ${STAR_RARITIES[dropAnim.finalRarity].color}88`,borderRight:`2px solid ${STAR_RARITIES[dropAnim.finalRarity].color}88`,zIndex:2,pointerEvents:"none",boxShadow:dropAnim.settled?`inset 0 0 30px ${STAR_RARITIES[dropAnim.finalRarity].glow}`:"none",transition:"box-shadow .5s"}}/>
+            {/* Bottom pointer */}
+            <div style={{position:"absolute",bottom:0,left:"50%",transform:"translateX(-50%)",width:0,height:0,borderLeft:"8px solid transparent",borderRight:"8px solid transparent",borderBottom:`10px solid ${STAR_RARITIES[dropAnim.finalRarity].color}`,zIndex:3,filter:`drop-shadow(0 -2px 6px ${STAR_RARITIES[dropAnim.finalRarity].glow})`}}/>
+            {/* Scrolling strip */}
+            <div style={{display:"flex",alignItems:"center",height:"100%",transition:dropAnim.spinPx>0?"transform 5.5s cubic-bezier(0.12,0.76,0.24,1)":"none",transform:`translateX(calc(50% - 40px - ${dropAnim.spinPx}px))`,willChange:"transform"}}>
               {dropAnim.spinItems.map((item,i)=>{
-                const isCenter=i===dropAnim.spinIdx;
                 const rr=STAR_RARITIES.find(r=>r.id===item.rarity)||STAR_RARITIES[0];
-                return <div key={i} style={{minWidth:60,height:60,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,opacity:isCenter?1:.4,transform:isCenter?"scale(1.1)":"scale(.85)",transition:"all .15s"}}>
-                  <span style={{fontSize:"1.5rem",filter:isCenter?`drop-shadow(0 0 8px ${rr.glow})`:"none"}}>{item.icon}</span>
-                  <span style={{fontFamily:"'Cinzel',serif",fontSize:".35rem",color:rr.color,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:55}}>{item.label.slice(0,12)}</span>
+                return <div key={i} style={{minWidth:80,height:80,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,borderRight:"1px solid rgba(255,255,255,.04)"}}>
+                  <span style={{fontSize:"1.8rem"}}>{item.icon}</span>
+                  <span style={{fontFamily:"'Cinzel',serif",fontSize:".38rem",color:rr.color,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:72}}>{item.label.slice(0,14)}</span>
+                  <span style={{width:6,height:6,borderRadius:"50%",background:rr.color,opacity:.6}}/>
                 </div>;
               })}
             </div>
+            {/* Edge fades */}
+            <div style={{position:"absolute",top:0,bottom:0,left:0,width:60,background:"linear-gradient(90deg,rgba(0,0,0,.8),transparent)",zIndex:1,pointerEvents:"none"}}/>
+            <div style={{position:"absolute",top:0,bottom:0,right:0,width:60,background:"linear-gradient(270deg,rgba(0,0,0,.8),transparent)",zIndex:1,pointerEvents:"none"}}/>
           </div>
         </>}
         {dropAnim.phase==="reveal"&&dropAnim.reward&&<>
