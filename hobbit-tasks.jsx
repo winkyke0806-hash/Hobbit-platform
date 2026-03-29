@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, Component } from "react";
 import { auth } from "./hobbit-app.jsx";
 import { signOut } from "firebase/auth";
 import BoardGame from "./hobbit-game.jsx";
+import { sfx, isMuted, toggleMute, playMusic, stopMusic } from "./hobbit-sounds.jsx";
 
 class ErrorCatch extends Component{constructor(p){super(p);this.state={err:null};}static getDerivedStateFromError(e){return{err:e};}componentDidCatch(e,i){console.error("ProfileTab crash:",e,i);}render(){if(this.state.err)return <div style={{padding:20,color:"#EF9A9A",fontFamily:"monospace",fontSize:".8rem",whiteSpace:"pre-wrap"}}><b>Hiba a profilban:</b><br/>{this.state.err.toString()}<br/>{this.state.err.stack}</div>;return this.props.children;}}
 
@@ -199,6 +200,26 @@ function isRegionUnlocked(regionIdx,completed){
   return doneCount>=2;
 }
 
+// ── ACHIEVEMENTS ──────────────────────────────────────────────────────────────
+const ACHIEVEMENTS=[
+  {id:"first_blood",icon:"🗡️",name:"Első Vér",desc:"Teljesítsd az első feladatot",check:s=>s.completed>=1,progress:s=>({current:Math.min(s.completed,1),target:1})},
+  {id:"mountaineer",icon:"🏔️",name:"Hegymászó",desc:"Teljesíts 5 feladatot",check:s=>s.completed>=5,progress:s=>({current:Math.min(s.completed,5),target:5})},
+  {id:"ring_bearer",icon:"💍",name:"Gyűrű Hordozó",desc:"Teljesíts 10 feladatot",check:s=>s.completed>=10,progress:s=>({current:Math.min(s.completed,10),target:10})},
+  {id:"dragon_slayer",icon:"🐉",name:"Sárkányölő",desc:"Mind a 15 feladat teljesítve",check:s=>s.completed>=15,progress:s=>({current:Math.min(s.completed,15),target:15})},
+  {id:"thousand",icon:"⭐",name:"Ezer Pont",desc:"Gyűjts össze 1000 pontot",check:s=>s.score>=1000,progress:s=>({current:Math.min(s.score,1000),target:1000})},
+  {id:"gold_rank",icon:"✨",name:"Arany Rang",desc:"Gyűjts össze 2000 pontot",check:s=>s.score>=2000,progress:s=>({current:Math.min(s.score,2000),target:2000})},
+  {id:"legendary",icon:"🌟",name:"Legendás",desc:"Gyűjts össze 2500 pontot",check:s=>s.score>=2500,progress:s=>({current:Math.min(s.score,2500),target:2500})},
+  {id:"wizard_friend",icon:"🧙",name:"Varázsló Barát",desc:"Szerezz 1 barátot",check:s=>s.friends>=1,progress:s=>({current:Math.min(s.friends,1),target:1})},
+  {id:"alliance",icon:"🤝",name:"Szövetségkötő",desc:"Szerezz 3 barátot",check:s=>s.friends>=3,progress:s=>({current:Math.min(s.friends,3),target:3})},
+  {id:"lightning",icon:"⚡",name:"Villámgyors",desc:"Teljesíts egy napi kihívást",check:s=>s.daily>=1},
+  {id:"shire_hero",icon:"🏡",name:"A Megye Hőse",desc:"Teljesítsd a Zsákos-domb összes feladatát",check:s=>[1,2,3].every(t=>s.completedIds.includes(t))},
+  {id:"erebor_conqueror",icon:"⛰️",name:"Erebor Meghódítója",desc:"Teljesítsd a Magányos Hegy összes feladatát",check:s=>[13,14,15].every(t=>s.completedIds.includes(t))},
+  {id:"high_scorer",icon:"🎯",name:"Mesterlövész",desc:"Szerezz 150+ pontot egy feladaton",check:s=>Object.values(s.scores).some(v=>v>=150)},
+  {id:"perfectionist",icon:"💎",name:"Perfekcionista",desc:"Teljesíts 5 feladatot 100+ ponttal",check:s=>Object.values(s.scores).filter(v=>v>=100).length>=5,progress:s=>({current:Math.min(Object.values(s.scores).filter(v=>v>=100).length,5),target:5})},
+  {id:"half_way",icon:"🛤️",name:"Félúton",desc:"Teljesítsd a feladatok felét",check:s=>s.completed>=8,progress:s=>({current:Math.min(s.completed,8),target:8})},
+];
+const _getAchievementStats=(completed,scores,friends=0,daily=0)=>({completed:completed.length,completedIds:completed,score:Object.values(scores).reduce((a,b)=>a+b,0),scores,friends,daily});
+
 // ── SHARED UI ──────────────────────────────────────────────────────────────────
 function FloatingStones({count=14}){
   const r=useRef(Array.from({length:count},(_,i)=>({id:i,x:Math.random()*100,y:Math.random()*100,w:10+Math.random()*30,h:7+Math.random()*20,vx:(Math.random()-.5)*.012,vy:(Math.random()-.5)*.009,rot:Math.random()*360,vr:(Math.random()-.5)*.022,op:.04+Math.random()*.07,t:i%3})));
@@ -245,6 +266,7 @@ function RadialTimer({total,left,size=56}){
 }
 
 function Feedback({good,text,onNext}){
+  useEffect(()=>{if(good)sfx.success();else sfx.error();},[]);
   return <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:good?"rgba(8,24,8,.96)":"rgba(24,8,8,.96)",zIndex:20,animation:"fadeIn .3s ease",gap:18,padding:24,textAlign:"center"}}>
     <div style={{fontSize:"3.5rem",animation:"popIn .4s cubic-bezier(.34,1.56,.64,1)"}}>{good?"✨":"💀"}</div>
     <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"clamp(1.1rem,4vw,1.7rem)",color:good?"#66BB6A":"#E53935",textShadow:`0 0 24px ${good?"rgba(102,187,106,.5)":"rgba(229,57,53,.5)"}`}}>{good?"Helyes!":"Nem egészen..."}</div>
@@ -288,31 +310,37 @@ function TaskResult({task,score,maxScore,onBack,onRetry,stats}){
 
 function StoryIntro({task,user,onStart}){
   const [p,setP]=useState(0);
+  const [typed,setTyped]=useState("");
+  const [typeDone,setTypeDone]=useState(false);
   const race=RACES.find(r=>r.id===user?.race)||RACES[3];
   const text=task.raceStory?.[user?.race]||task.story;
   useEffect(()=>{const t=[setTimeout(()=>setP(1),300),setTimeout(()=>setP(2),900)];return()=>t.forEach(clearTimeout)},[]);
+  // Typewriter effect for the story text
+  useEffect(()=>{
+    if(p<2)return;
+    let i=0;const id=setInterval(()=>{i++;if(i>=text.length){clearInterval(id);setTypeDone(true);}setTyped(text.slice(0,i));},28);
+    return()=>clearInterval(id);
+  },[p,text]);
+  const skipType=()=>{setTyped(text);setTypeDone(true);};
   return <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"36px 24px",textAlign:"center",gap:20}}>
-    <div style={{opacity:p>=1?1:0,transition:"all .8s ease",fontSize:"3.2rem",filter:`drop-shadow(0 0 18px ${task.glow})`}}>{task.icon}</div>
+    {/* Cinematic bars */}
+    <div style={{position:"absolute",top:0,left:0,right:0,height:28,background:"linear-gradient(180deg,rgba(0,0,0,.7),transparent)",pointerEvents:"none",zIndex:1}}/>
+    <div style={{position:"absolute",bottom:0,left:0,right:0,height:28,background:"linear-gradient(0deg,rgba(0,0,0,.7),transparent)",pointerEvents:"none",zIndex:1}}/>
+    <div style={{opacity:p>=1?1:0,transition:"all .8s ease",fontSize:"3.2rem",filter:`drop-shadow(0 0 18px ${task.glow})`,animation:p>=1?"gentlePop .6s ease both":"none"}}>{task.icon}</div>
     <div style={{opacity:p>=1?1:0,transition:"all .8s ease .2s"}}>
       <div style={{fontFamily:"'Cinzel',serif",fontSize:".68rem",letterSpacing:".28em",color:"var(--gm)",textTransform:"uppercase",marginBottom:7}}>— {task.location} —</div>
       <h2 style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"clamp(1.1rem,4vw,1.8rem)",color:task.color,textShadow:`0 0 28px ${task.glow}`,marginBottom:3}}>{task.title}</h2>
       <div style={{fontFamily:"'Cinzel',serif",fontSize:".7rem",color:"var(--gm)",letterSpacing:".1em"}}>{task.subtitle}</div>
     </div>
-    <div style={{opacity:p>=2?1:0,transition:"all .8s ease .4s",maxWidth:440,fontStyle:"italic",fontSize:"1rem",color:"var(--td)",lineHeight:1.8,padding:"14px 18px",border:"1px solid rgba(201,168,76,.13)",borderLeft:`3px solid ${task.color}`,background:"rgba(0,0,0,.2)",textAlign:"left"}}>
-      <span style={{color:race.color,marginRight:8}}>{race.icon}</span>{text}
+    <div onClick={!typeDone?skipType:undefined} style={{opacity:p>=2?1:0,transition:"opacity .8s ease .4s",maxWidth:440,fontStyle:"italic",fontSize:"1rem",color:"var(--td)",lineHeight:1.8,padding:"14px 18px",border:"1px solid rgba(201,168,76,.13)",borderLeft:`3px solid ${task.color}`,background:"rgba(0,0,0,.2)",textAlign:"left",cursor:!typeDone?"pointer":"default",minHeight:60}}>
+      <span style={{color:race.color,marginRight:8}}>{race.icon}</span>{typed}{!typeDone&&<span style={{color:task.color,animation:"runeFlicker 1s ease-in-out infinite"}}>|</span>}
     </div>
-    <div style={{opacity:p>=2?1:0,transition:"all .8s ease .6s",display:"flex",flexDirection:"column",alignItems:"center",gap:7}}>
+    <div style={{opacity:typeDone?1:0,transition:"all .5s ease",display:"flex",flexDirection:"column",alignItems:"center",gap:7}}>
       {task.timeLimit>0&&<div style={{fontFamily:"'Cinzel',serif",fontSize:".65rem",color:"var(--gm)",letterSpacing:".12em"}}>⏳ {task.timeLimit} MÁSODPERC &nbsp;·&nbsp; 🏆 MAX {task.basePoints} PONT</div>}
       {!task.timeLimit&&<div style={{fontFamily:"'Cinzel',serif",fontSize:".65rem",color:"var(--gm)",letterSpacing:".12em"}}>🔮 JÓSLAT-KALAND &nbsp;·&nbsp; 🏆 MAX {task.basePoints} PONT</div>}
-      <button
-    className="btn-start"
-    onClick={() => {
-        onStart();
-    }}
-    style={{ "--tc": task.color }}
->
-    <span>ᚠ</span>Kaland Kezdete<span>ᚠ</span>
-</button>
+      <button className="btn-start" onClick={onStart} style={{"--tc":task.color}}>
+        <span>ᚠ</span>Kaland Kezdete<span>ᚠ</span>
+      </button>
     </div>
   </div>;
 }
@@ -590,10 +618,17 @@ function TaskModal({task,user,onClose,onComplete}){
 function AdventureMap({user,completed,scores,onSelect}){
   const race=RACES.find(r=>r.id===user?.race)||RACES[3];
   const [hov,setHov]=useState(null);
+  const [mapZoom,setMapZoom]=useState(null); // {x,y} target for zoom animation
   const totalScore=Object.values(scores).reduce((a,b)=>a+b,0);
   const roadCurve=(x1,y1,x2,y2)=>{const dx=x2-x1,dy=y2-y1;return `M${x1} ${y1} C${x1+dx*.35+(dy>0?1.5:-1.5)} ${y1+dy*.15} ${x2-dx*.35+(dy>0?-1.5:1.5)} ${y2-dy*.15} ${x2} ${y2}`;};
+  const handleNodeClick=(task,node)=>{
+    sfx.click();
+    setMapZoom({x:node.x,y:node.y});
+    setTimeout(()=>{onSelect(task);setMapZoom(null);},600);
+  };
+  const zoomStyle=mapZoom?{transform:"scale(2.2)",transformOrigin:`${mapZoom.x}% ${mapZoom.y}%`,transition:"transform .6s cubic-bezier(.22,1,.36,1), transform-origin .6s cubic-bezier(.22,1,.36,1)"}:{transform:"scale(1)",transformOrigin:"50% 50%",transition:"transform .4s cubic-bezier(.22,1,.36,1), transform-origin .4s cubic-bezier(.22,1,.36,1)"};
   return <div style={{flex:1,position:"relative",overflow:"hidden",minHeight:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
-    <div className="map-parchment" style={{position:"relative",width:"100%",maxWidth:"min(100%,calc(100vh * 16/9))",aspectRatio:"16/9",overflow:"hidden",boxShadow:"0 4px 80px rgba(0,0,0,.85),inset 0 0 100px rgba(10,6,2,.6)"}}>
+    <div className="map-parchment" style={{position:"relative",width:"100%",maxWidth:"min(100%,calc(100vh * 16/9))",aspectRatio:"16/9",overflow:"hidden",boxShadow:"0 4px 80px rgba(0,0,0,.85),inset 0 0 100px rgba(10,6,2,.6)",...zoomStyle}}>
       {/* ═══ MULTI-LAYER PARCHMENT ═══ */}
       <div style={{position:"absolute",inset:0,background:"radial-gradient(ellipse at 35% 30%,#4a3c26,#2a1e10 55%,#181008)",zIndex:0}}/>
       <div style={{position:"absolute",inset:0,background:"radial-gradient(circle at 72% 22%,rgba(201,168,76,.1),transparent 40%)",zIndex:0}}/>
@@ -769,7 +804,7 @@ function AdventureMap({user,completed,scores,onSelect}){
           const node=reg.nodes[ti];
           if(!task||!node)return null;
           const isDone=completed.includes(taskId);const isHov=hov===taskId;
-          return <div key={taskId} style={{position:"absolute",left:`${node.x}%`,top:`${node.y}%`,transform:"translate(-50%,-50%)",zIndex:10,cursor:unlocked?"pointer":"default",opacity:unlocked?1:.12,transition:"opacity .6s"}} onMouseEnter={()=>unlocked&&setHov(taskId)} onMouseLeave={()=>setHov(null)} onClick={()=>unlocked&&onSelect(task)}>
+          return <div key={taskId} style={{position:"absolute",left:`${node.x}%`,top:`${node.y}%`,transform:"translate(-50%,-50%)",zIndex:10,cursor:unlocked?"pointer":"default",opacity:unlocked?1:.12,transition:"opacity .6s"}} onMouseEnter={()=>unlocked&&setHov(taskId)} onMouseLeave={()=>setHov(null)} onClick={()=>unlocked&&!mapZoom&&handleNodeClick(task,node)}>
             {!isDone&&unlocked&&<div style={{position:"absolute",inset:-10,borderRadius:"50%",border:`1.5px solid ${reg.color}`,opacity:.2,animation:"nodePulse 2.5s ease-in-out infinite"}}/>}
             {(isDone||isHov)&&<div style={{position:"absolute",inset:-5,borderRadius:"50%",background:`radial-gradient(circle,${reg.glow},transparent 70%)`,opacity:isDone?.35:.2,transition:"opacity .3s"}}/>}
             <div style={{position:"relative",width:46,height:46,borderRadius:"50%",border:`2.5px solid ${isDone?"var(--gold)":isHov?reg.color:"rgba(201,168,76,.16)"}`,background:isDone?`radial-gradient(circle at 40% 35%,${reg.glow},rgba(8,6,4,.9))`:`radial-gradient(circle at 40% 35%,rgba(40,32,22,.95),rgba(8,6,4,.92))`,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .3s cubic-bezier(.22,1,.36,1)",transform:isHov?"scale(1.25)":"scale(1)",boxShadow:isDone?`0 0 22px ${reg.glow},0 2px 10px rgba(0,0,0,.6)`:isHov?`0 0 18px ${reg.glow},0 2px 8px rgba(0,0,0,.5)`:"0 2px 8px rgba(0,0,0,.4)"}}>
@@ -827,15 +862,17 @@ function MemoryGame(){
   const flip=(id)=>{
     if(locked||sel.length===2)return;
     const c=cards.find(c=>c.id===id);if(c.flipped||c.matched)return;
+    sfx.cardFlip();
     const newCards=cards.map(c=>c.id===id?{...c,flipped:true}:c);setCards(newCards);
     const newSel=[...sel,id];setSel(newSel);
     if(newSel.length===2){
       setMoves(m=>m+1);setLocked(true);
       const [a,b]=newSel.map(id=>newCards.find(c=>c.id===id));
       if(a.emoji===b.emoji){
+        sfx.success();
         const next=newCards.map(c=>newSel.includes(c.id)?{...c,matched:true}:c);setCards(next);setSel([]);setLocked(false);
-        if(next.every(c=>c.matched))setWon(true);
-      } else {setTimeout(()=>{setCards(cc=>cc.map(c=>newSel.includes(c.id)?{...c,flipped:false}:c));setSel([]);setLocked(false);},900);}
+        if(next.every(c=>c.matched))sfx.achievement();
+      } else {sfx.error();setTimeout(()=>{setCards(cc=>cc.map(c=>newSel.includes(c.id)?{...c,flipped:false}:c));setSel([]);setLocked(false);},900);}
     }
   };
   const reset=()=>{setCards([...CARD_EMOJIS,...CARD_EMOJIS].sort(()=>Math.random()-.5).map((e,i)=>({id:i,emoji:e,flipped:false,matched:false})));setSel([]);setMoves(0);setLocked(false);setWon(false);};
@@ -865,8 +902,8 @@ function ReactionGame(){
   const hit=()=>{
     if(phase!=="show"||!shown)return;
     const ms=Date.now()-start;
-    if(shown.ok){setScore(s=>s+Math.max(0,100-Math.floor(ms/10)));setTimes(t=>[...t,ms]);setWrong(false);}
-    else{setScore(s=>Math.max(0,s-50));setWrong(true);}
+    if(shown.ok){sfx.success();setScore(s=>s+Math.max(0,100-Math.floor(ms/10)));setTimes(t=>[...t,ms]);setWrong(false);}
+    else{sfx.error();setScore(s=>Math.max(0,s-50));setWrong(true);}
     setShown(null);setPhase("idle");setRound(r=>r+1);
   };
   const skip=()=>{if(phase!=="show"||!shown)return;if(!shown.ok){setScore(s=>s+30);}else{setScore(s=>Math.max(0,s-20));}setShown(null);setPhase("idle");setRound(r=>r+1);};
@@ -934,7 +971,8 @@ function WordSearch(){
       const w=sel.map(([r,c])=>grid[r]?.[c]||"").join("");const wr=[...sel].reverse().map(([r,c])=>grid[r]?.[c]||"").join("");
       const fw=words.find(fw=>fw===w||fw===wr);
       if(fw&&!foundWords.includes(fw)){
-        setFoundWords(f=>[...f,fw]);
+        sfx.success();
+        setFoundWords(f=>{const nf=[...f,fw];if(nf.length===words.length)sfx.achievement();return nf;});
         setFoundCells(prev=>{const next=new Set(prev);sel.forEach(([r,c])=>next.add(key(r,c)));return next;});
       }
     }
@@ -963,6 +1001,232 @@ function WordSearch(){
   </div>;
 }
 
+// ── NEW MINI GAMES ──────────────────────────────────────────────────────────
+const RIDDLES=[
+  {q:"Lábak nélkül jár, szárnyak nélkül száll, fog nélkül harap, száj nélkül kiált.",a:["A szél","A tűz","A víz","Az idő"],ok:0},
+  {q:"Harminc fehér ló áll egy vörös dombon: először rágnak, aztán topognak, aztán megállnak.",a:["Ujjak","Fogak","Hópelyhek","Csillagok"],ok:1},
+  {q:"Egy szem nélkül van, de igét lát; nincs szája, mégis mindent mond.",a:["A könyv","A tükör","A hold","Az álom"],ok:0},
+  {q:"Mindent felfal: madarakat, állatokat, fákat, virágokat; vasat rág, acélt harap; kemény követ lisztté őröl; királyt megöl, várost leront, és hegyet is leterít.",a:["Az idő","A sárkány","A vihar","A tűz"],ok:0},
+  {q:"Csendben fekszik egy aranyágyon, nem lélegzik, nem mozdul, mégis féltékenyen őrzi a kincsét.",a:["Smaug","Gollam","A Gyűrű","Thorin"],ok:0},
+  {q:"Egy doboz kulcs nélkül, fedél nélkül, mégis arany kincs rejtőzik benne.",a:["Tojás","Láda","Hordó","Levél"],ok:0},
+  {q:"Könnyebb, mint a pehely, mégis senki sem bírja sokáig tartani.",a:["A lélegzet","A remény","A fény","A buborék"],ok:0},
+  {q:"Mi az, ami reggel négy lábon, délben két lábon, este három lábon jár?",a:["Az ember","A sárkány","A hobbit","A macska"],ok:0},
+];
+
+function RiddleGame(){
+  const [idx,setIdx]=useState(0);const [score,setScore]=useState(0);const [chosen,setChosen]=useState(null);const [done,setDone]=useState(false);
+  const riddle=RIDDLES[idx];
+  const choose=(i)=>{
+    if(chosen!==null)return;
+    setChosen(i);
+    if(i===riddle.ok){sfx.success();setScore(s=>s+100);}else sfx.error();
+    setTimeout(()=>{
+      if(idx<RIDDLES.length-1){setIdx(n=>n+1);setChosen(null);}
+      else{setDone(true);if(score+((i===riddle.ok)?100:0)>=RIDDLES.length*60)sfx.achievement();}
+    },1200);
+  };
+  const reset=()=>{setIdx(0);setScore(0);setChosen(null);setDone(false);};
+  if(done)return <div style={{padding:"20px",display:"flex",flexDirection:"column",alignItems:"center",gap:14}}>
+    <div style={{fontSize:"3rem",animation:"gentlePop .5s ease both"}}>🏆</div>
+    <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.1rem",color:"var(--gold)"}}>Párbaj vége!</div>
+    <div style={{fontFamily:"'Cinzel',serif",fontSize:".9rem",color:"var(--text)"}}>{score} / {RIDDLES.length*100} pont</div>
+    <div style={{fontFamily:"'EB Garamond',serif",fontSize:".85rem",color:"var(--td)",fontStyle:"italic"}}>{score>=RIDDLES.length*80?"Gollam is megirigyelte volna a tudásod!":score>=RIDDLES.length*50?"Nem rossz, kalandor!":"Gyakorolj még, fiatal hobbit!"}</div>
+    <button onClick={reset} className="btn-nq">Újra ↻</button>
+  </div>;
+  return <div style={{padding:"14px",display:"flex",flexDirection:"column",gap:12,height:"100%",overflow:"auto"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+      <div style={{fontFamily:"'Cinzel',serif",fontSize:".7rem",color:"var(--gm)",letterSpacing:".1em"}}>{idx+1}/{RIDDLES.length}</div>
+      <div style={{fontFamily:"'Cinzel',serif",fontSize:".7rem",color:"var(--gold)"}}>{score} pont</div>
+    </div>
+    <div style={{padding:"18px 16px",background:"rgba(122,74,187,.05)",border:"1px solid rgba(122,74,187,.2)",borderRadius:4}}>
+      <div style={{fontFamily:"'EB Garamond',serif",fontSize:"1.05rem",color:"var(--text)",fontStyle:"italic",lineHeight:1.6,textAlign:"center"}}>"{riddle.q}"</div>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+      {riddle.a.map((a,i)=>{
+        const isOk=i===riddle.ok;const picked=chosen===i;
+        const bg=chosen===null?"rgba(255,255,255,.02)":isOk?"rgba(102,187,106,.1)":picked?"rgba(229,57,53,.08)":"rgba(255,255,255,.02)";
+        const bc=chosen===null?"rgba(201,168,76,.15)":isOk?"rgba(102,187,106,.5)":picked?"rgba(229,57,53,.4)":"rgba(201,168,76,.08)";
+        const col=chosen===null?"var(--text)":isOk?"#A5D6A7":picked?"#EF9A9A":"var(--gm)";
+        return <button key={i} onClick={()=>choose(i)} disabled={chosen!==null} style={{padding:"12px 10px",background:bg,border:`1px solid ${bc}`,color:col,fontFamily:"'EB Garamond',serif",fontSize:".9rem",cursor:chosen===null?"pointer":"default",transition:"all .25s",textAlign:"center",lineHeight:1.4}}>{a}</button>;
+      })}
+    </div>
+  </div>;
+}
+
+function ArcheryGame(){
+  const [phase,setPhase]=useState("menu");const [score,setScore]=useState(0);const [round,setRound]=useState(0);const [target,setTarget]=useState(null);const [result,setResult]=useState(null);const timerRef=useRef(null);const ROUNDS=10;
+  const spawnTarget=()=>{
+    setResult(null);
+    const x=15+Math.random()*70;const y=15+Math.random()*60;const size=30+Math.random()*25;const life=1200+Math.random()*800;
+    setTarget({x,y,size,life,spawned:Date.now()});
+    timerRef.current=setTimeout(()=>{setTarget(null);setResult("miss");sfx.error();setRound(r=>{const next=r+1;if(next>=ROUNDS)setPhase("done");return next;});},life);
+  };
+  const hitTarget=()=>{
+    if(!target)return;
+    clearTimeout(timerRef.current);
+    const ms=Date.now()-target.spawned;
+    const pts=Math.max(10,Math.round(150-ms/10-(target.size-30)*1.5));
+    sfx.success();
+    setScore(s=>s+pts);setResult(`+${pts}`);setTarget(null);
+    setRound(r=>{const next=r+1;if(next>=ROUNDS){setPhase("done");if(score+pts>=ROUNDS*80)sfx.achievement();}return next;});
+  };
+  const startGame=()=>{setPhase("play");setScore(0);setRound(0);setTarget(null);setResult(null);setTimeout(spawnTarget,500);};
+  useEffect(()=>{if(phase==="play"&&!target&&round<ROUNDS&&result!==null){const t=setTimeout(spawnTarget,600);return()=>clearTimeout(t);}},[ target,round,result,phase]);
+  useEffect(()=>()=>clearTimeout(timerRef.current),[]);
+  if(phase==="done")return <div style={{padding:"20px",display:"flex",flexDirection:"column",alignItems:"center",gap:14}}>
+    <div style={{fontSize:"3rem",animation:"gentlePop .5s ease both"}}>🏹</div>
+    <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.1rem",color:"var(--gold)"}}>Gyakorlat vége!</div>
+    <div style={{fontFamily:"'Cinzel',serif",fontSize:".9rem",color:"var(--text)"}}>{score} pont {ROUNDS} lövésből</div>
+    <div style={{fontFamily:"'EB Garamond',serif",fontSize:".85rem",color:"var(--td)",fontStyle:"italic"}}>{score>=ROUNDS*100?"Bard büszke lenne rád!":score>=ROUNDS*50?"Ígéretes íjász vagy!":"A tóvárosi gyakorlótéren még sokat kell edzened!"}</div>
+    <button onClick={startGame} className="btn-nq">Újra ↻</button>
+  </div>;
+  if(phase==="menu")return <div style={{padding:"20px",display:"flex",flexDirection:"column",alignItems:"center",gap:16}}>
+    <div style={{fontSize:"3.5rem"}}>🏹</div>
+    <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1rem",color:"var(--gold)",textAlign:"center"}}>Bard Íjász Kihívás</div>
+    <div style={{fontFamily:"'EB Garamond',serif",fontSize:".88rem",color:"var(--td)",fontStyle:"italic",textAlign:"center",lineHeight:1.6,maxWidth:280}}>Célozz gyorsan és pontosan! A célpontok eltűnnek — minél gyorsabban találsz, annál több pontot kapsz.</div>
+    <button onClick={startGame} className="btn-nq">Kezdés →</button>
+  </div>;
+  return <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",height:"100%",overflow:"hidden"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+      <div style={{fontFamily:"'Cinzel',serif",fontSize:".7rem",color:"var(--gm)",letterSpacing:".1em"}}>{round}/{ROUNDS} lövés</div>
+      <div style={{fontFamily:"'Cinzel',serif",fontSize:".7rem",color:"var(--gold)"}}>{score} pont</div>
+    </div>
+    <div style={{flex:1,position:"relative",border:"1px solid rgba(201,168,76,.12)",background:"linear-gradient(180deg,rgba(10,20,15,.6),rgba(15,12,8,.8))",minHeight:200,overflow:"hidden",cursor:"crosshair"}}>
+      {target&&<button onClick={hitTarget} style={{position:"absolute",left:`${target.x}%`,top:`${target.y}%`,transform:"translate(-50%,-50%)",width:target.size,height:target.size,borderRadius:"50%",background:"radial-gradient(circle at 40% 35%,rgba(229,57,53,.15),rgba(229,57,53,.05))",border:"2px solid rgba(229,57,53,.6)",cursor:"crosshair",animation:"popIn .15s ease",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 0 20px rgba(229,57,53,.3)"}}>
+        <div style={{width:"50%",height:"50%",borderRadius:"50%",background:"radial-gradient(circle,rgba(229,57,53,.5),transparent)",border:"1px solid rgba(229,57,53,.4)"}}/>
+        <div style={{position:"absolute",width:4,height:4,borderRadius:"50%",background:"#E53935"}}/>
+      </button>}
+      {result&&!target&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.2rem",color:result==="miss"?"#EF9A9A":"#66BB6A",animation:"gentlePop .3s ease",textShadow:result==="miss"?"none":"0 0 12px rgba(102,187,106,.4)"}}>{result==="miss"?"Elhibáztad!":result}</div>
+      </div>}
+    </div>
+  </div>;
+}
+
+function TreasureGame(){
+  const SIZE=6;const TREASURES=8;const TRAPS=5;
+  const [board]=useState(()=>{
+    const b=Array.from({length:SIZE},()=>Array.from({length:SIZE},()=>({type:"empty",revealed:false})));
+    const place=(type,count)=>{let placed=0;while(placed<count){const r=Math.floor(Math.random()*SIZE);const c=Math.floor(Math.random()*SIZE);if(b[r][c].type==="empty"){b[r][c].type=type;placed++;}}};
+    place("gold",TREASURES);place("trap",TRAPS);
+    for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){
+      if(b[r][c].type!=="empty")continue;
+      let adj=0;
+      for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){if(dr===0&&dc===0)continue;const nr=r+dr,nc=c+dc;if(nr>=0&&nr<SIZE&&nc>=0&&nc<SIZE&&b[nr][nc].type==="gold")adj++;}
+      b[r][c].hint=adj;
+    }
+    return b;
+  });
+  const [cells,setCells]=useState(()=>board.map(r=>r.map(c=>({...c}))));
+  const [found,setFound]=useState(0);const [trapped,setTrapped]=useState(0);const [done,setDone]=useState(false);
+  const reveal=(r,c)=>{
+    if(cells[r][c].revealed||done)return;
+    const next=cells.map(row=>row.map(cell=>({...cell})));
+    next[r][c].revealed=true;
+    setCells(next);
+    if(next[r][c].type==="gold"){sfx.coin();setFound(f=>{const nf=f+1;if(nf>=TREASURES){setDone(true);sfx.achievement();}return nf;});}
+    else if(next[r][c].type==="trap"){sfx.error();setTrapped(t=>{const nt=t+1;if(nt>=3){setDone(true);}return nt;});}
+    else sfx.click();
+  };
+  const reset=()=>{
+    const b=Array.from({length:SIZE},()=>Array.from({length:SIZE},()=>({type:"empty",revealed:false})));
+    const place=(type,count)=>{let placed=0;while(placed<count){const r=Math.floor(Math.random()*SIZE);const c=Math.floor(Math.random()*SIZE);if(b[r][c].type==="empty"){b[r][c].type=type;placed++;}}};
+    place("gold",TREASURES);place("trap",TRAPS);
+    for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){if(b[r][c].type!=="empty")continue;let adj=0;for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){if(dr===0&&dc===0)continue;const nr=r+dr,nc=c+dc;if(nr>=0&&nr<SIZE&&nc>=0&&nc<SIZE&&b[nr][nc].type==="gold")adj++;}b[r][c].hint=adj;}
+    setCells(b.map(r=>r.map(c=>({...c}))));setFound(0);setTrapped(0);setDone(false);
+  };
+  const icons={gold:"💰",trap:"💀",empty:""};
+  return <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",height:"100%",overflow:"hidden"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+      <div style={{fontFamily:"'Cinzel',serif",fontSize:".7rem",letterSpacing:".1em",color:"var(--gm)",textTransform:"uppercase"}}>💎 Erebor Kincstár</div>
+      <div style={{display:"flex",gap:12,alignItems:"center"}}>
+        <span style={{fontFamily:"'Cinzel',serif",fontSize:".7rem",color:"var(--gold)"}}>💰 {found}/{TREASURES}</span>
+        <span style={{fontFamily:"'Cinzel',serif",fontSize:".7rem",color:"#EF9A9A"}}>💀 {trapped}/3</span>
+        <button onClick={reset} style={{background:"none",border:"1px solid rgba(201,168,76,.2)",color:"var(--gm)",padding:"4px 10px",fontFamily:"'Cinzel',serif",fontSize:".65rem",cursor:"pointer"}}>Újra</button>
+      </div>
+    </div>
+    <div style={{fontStyle:"italic",fontSize:".78rem",color:"var(--td)",lineHeight:1.5,padding:"6px 12px",borderLeft:"2px solid rgba(201,168,76,.2)",marginBottom:8}}>Keress aranyat Smaug kincstárában! A számok jelzik, hány arany van a szomszédos mezőkön. Vigyázz a csapdákra — 3 csapda = vége!</div>
+    {done&&<div style={{textAlign:"center",padding:"10px",background:found>=TREASURES?"rgba(201,168,76,.08)":"rgba(229,57,53,.08)",border:`1px solid ${found>=TREASURES?"rgba(201,168,76,.3)":"rgba(229,57,53,.3)"}`,fontFamily:"'Cinzel',serif",fontSize:".85rem",color:found>=TREASURES?"var(--gold)":"#EF9A9A",animation:"fadeIn .4s",marginBottom:8}}>{found>=TREASURES?"✨ Megtaláltad Smaug minden kincsét! ✨":"💀 A csapdák legyőztek! Próbáld újra!"}</div>}
+    <div style={{display:"grid",gridTemplateColumns:`repeat(${SIZE},1fr)`,gap:4,flex:1,minHeight:0}}>
+      {cells.map((row,r)=>row.map((cell,c)=>{
+        const bg=!cell.revealed?"rgba(201,168,76,.06)":cell.type==="gold"?"rgba(201,168,76,.15)":cell.type==="trap"?"rgba(229,57,53,.1)":"rgba(255,255,255,.02)";
+        const bc=!cell.revealed?"rgba(201,168,76,.15)":cell.type==="gold"?"rgba(201,168,76,.4)":cell.type==="trap"?"rgba(229,57,53,.35)":"rgba(201,168,76,.08)";
+        return <button key={`${r}-${c}`} onClick={()=>reveal(r,c)} disabled={cell.revealed||done} style={{display:"flex",alignItems:"center",justifyContent:"center",background:bg,border:`1px solid ${bc}`,cursor:cell.revealed||done?"default":"pointer",transition:"all .2s",fontSize:cell.revealed?"1.1rem":".8rem",fontFamily:"'Cinzel',serif",color:cell.hint>0?"var(--gold)":"var(--gm)"}}>
+          {cell.revealed?(cell.type!=="empty"?icons[cell.type]:cell.hint>0?cell.hint:""):"?"}
+        </button>;
+      }))}
+    </div>
+  </div>;
+}
+
+function TavernChat(){
+  const [messages,setMessages]=useState([]);
+  const [input,setInput]=useState("");
+  const [expanded,setExpanded]=useState(false);
+  const endRef=useRef(null);
+  const user=useState(()=>{try{return JSON.parse(localStorage.getItem("hobbit_current"));}catch{return null;}})[0];
+  const myName=user?.adventureName;
+  const myRace=user?.race||"human";
+
+  useEffect(()=>{
+    try{
+      const {getDatabase,ref:fbRef,onValue,off,query,limitToLast}=window.__fbDB||{};
+      if(!getDatabase)return;
+      const db=getDatabase();
+      const chatRef=query(fbRef(db,"global_chat"),limitToLast(50));
+      onValue(chatRef,(snap)=>{
+        const data=snap.val()||{};
+        setMessages(Object.values(data).sort((a,b)=>a.ts-b.ts));
+      });
+      return ()=>off(chatRef);
+    }catch(e){}
+  },[]);
+
+  useEffect(()=>{if(expanded)endRef.current?.scrollIntoView({behavior:"smooth"});},[messages,expanded]);
+
+  const send=()=>{
+    const text=input.trim();
+    if(!text||!myName)return;
+    sfx.click();
+    try{
+      const {getDatabase,ref:fbRef,push,set}=window.__fbDB||{};
+      if(!getDatabase)return;
+      const db=getDatabase();
+      const msgRef=push(fbRef(db,"global_chat"));
+      set(msgRef,{from:myName,race:myRace,text,ts:Date.now()});
+      setInput("");
+    }catch(e){}
+  };
+
+  if(!expanded)return <button onClick={()=>setExpanded(true)} style={{margin:"0 16px 10px",padding:"10px",background:"rgba(201,168,76,.04)",border:"1px solid rgba(201,168,76,.15)",color:"var(--gm)",fontFamily:"'Cinzel',serif",fontSize:".65rem",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,letterSpacing:".1em",flexShrink:0}}>💬 Fogadó Chat {messages.length>0&&<span style={{background:"rgba(201,168,76,.15)",padding:"1px 6px",borderRadius:8,fontSize:".55rem",color:"var(--gold)"}}>{messages.length}</span>}</button>;
+
+  return <div style={{margin:"0 10px 8px",border:"1px solid rgba(201,168,76,.18)",background:"rgba(0,0,0,.3)",display:"flex",flexDirection:"column",maxHeight:220,flexShrink:0,animation:"fadeSlideIn .25s ease both"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 10px",borderBottom:"1px solid rgba(201,168,76,.1)",flexShrink:0}}>
+      <div style={{fontFamily:"'Cinzel',serif",fontSize:".6rem",color:"var(--gold)",letterSpacing:".1em"}}>💬 Fogadó Chat</div>
+      <button onClick={()=>setExpanded(false)} style={{background:"none",border:"none",color:"var(--gm)",cursor:"pointer",fontSize:".7rem",padding:"2px 6px"}}>▼</button>
+    </div>
+    <div style={{flex:1,overflowY:"auto",padding:"6px 10px",display:"flex",flexDirection:"column",gap:4}}>
+      {messages.length===0&&<div style={{textAlign:"center",padding:"12px 0",opacity:.4,fontFamily:"'Cinzel',serif",fontSize:".6rem",color:"var(--gm)"}}>Még senki sem szólt...</div>}
+      {messages.map((m,i)=>{
+        const isMe=m.from===myName;
+        const r=RACES.find(r=>r.id===m.race)||RACES[3];
+        return <div key={i} style={{display:"flex",gap:6,alignItems:isMe?"flex-end":"flex-start",flexDirection:isMe?"row-reverse":"row"}}>
+          <span style={{fontSize:".7rem",flexShrink:0}}>{r.icon}</span>
+          <div style={{maxWidth:"75%"}}>
+            {!isMe&&<div style={{fontFamily:"'Cinzel',serif",fontSize:".45rem",color:r.color,marginBottom:1}}>{m.from}</div>}
+            <div style={{padding:"4px 8px",background:isMe?"rgba(201,168,76,.08)":"rgba(58,122,139,.06)",border:`1px solid ${isMe?"rgba(201,168,76,.2)":"rgba(58,122,139,.15)"}`,borderRadius:isMe?"8px 8px 2px 8px":"8px 8px 8px 2px",fontFamily:"'EB Garamond',serif",fontSize:".82rem",color:"var(--text)",lineHeight:1.3,wordBreak:"break-word"}}>{m.text}</div>
+          </div>
+        </div>;
+      })}
+      <div ref={endRef}/>
+    </div>
+    <div style={{display:"flex",gap:6,padding:"6px 8px",borderTop:"1px solid rgba(201,168,76,.1)",flexShrink:0}}>
+      <input value={input} onChange={e=>setInput(e.target.value.slice(0,200))} onKeyDown={e=>e.key==="Enter"&&send()} placeholder="Üzenet a fogadóban..." style={{flex:1,background:"rgba(0,0,0,.4)",border:"1px solid rgba(201,168,76,.15)",color:"var(--text)",fontFamily:"'EB Garamond',serif",fontSize:".82rem",padding:"6px 10px",outline:"none",borderRadius:3}}/>
+      <button onClick={send} style={{padding:"6px 12px",background:"rgba(201,168,76,.08)",border:"1px solid rgba(201,168,76,.3)",color:"var(--gold)",fontFamily:"'Cinzel',serif",fontSize:".6rem",cursor:"pointer",borderRadius:3}}>›</button>
+    </div>
+  </div>;
+}
+
 function MiniGamesTab(){
   const [activeGame,setActiveGame]=useState(null);
   const [carouselIdx,setCarouselIdx]=useState(0);
@@ -971,11 +1235,15 @@ function MiniGamesTab(){
     {id:"memory",label:"Tolkien Memória",icon:"🃏",desc:"Találd meg a párokat!",color:"#C9A84C"},
     {id:"reaction",label:"Kalandor Reflexek",icon:"⚡",desc:"Barát vagy ellenség?",color:"#7A4ABB"},
     {id:"wordsearch",label:"Tolkien Szókereső",icon:"🔍",desc:"Keresd meg a neveket!",color:"#3A7A8B"},
+    {id:"riddle",label:"Gollam Rejtvények",icon:"🕯️",desc:"Fejtsd meg a találós kérdéseket!",color:"#6B8C3E"},
+    {id:"archery",label:"Bard Íjász Kihívás",icon:"🏹",desc:"Célozz gyorsan és pontosan!",color:"#A0522D"},
+    {id:"treasure",label:"Erebor Kincstár",icon:"💎",desc:"Keresd meg Smaug kincseit!",color:"#E8C96A"},
   ];
   const swipeStart=(e)=>{touchRef.current=e.touches?e.touches[0].clientX:e.clientX;};
   const swipeEnd=(e)=>{if(touchRef.current===null)return;const end=e.changedTouches?e.changedTouches[0].clientX:e.clientX;const diff=touchRef.current-end;if(Math.abs(diff)>50){if(diff>0&&carouselIdx<games.length-1)setCarouselIdx(i=>i+1);else if(diff<0&&carouselIdx>0)setCarouselIdx(i=>i-1);}touchRef.current=null;};
   if(activeGame){
-    const GameComp=activeGame==="memory"?MemoryGame:activeGame==="reaction"?ReactionGame:WordSearch;
+    const GAME_MAP={memory:MemoryGame,reaction:ReactionGame,wordsearch:WordSearch,riddle:RiddleGame,archery:ArcheryGame,treasure:TreasureGame};
+    const GameComp=GAME_MAP[activeGame]||MemoryGame;
     return <div className="gentle-pop" style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}>
       <div style={{display:"flex",alignItems:"center",padding:"10px 14px",borderBottom:"1px solid rgba(201,168,76,.12)",flexShrink:0,gap:10}}>
         <button onClick={()=>setActiveGame(null)} style={{background:"none",border:"1px solid rgba(201,168,76,.2)",color:"var(--gm)",padding:"4px 10px",fontFamily:"'Cinzel',serif",fontSize:".65rem",cursor:"pointer",transition:"all .2s"}} onMouseEnter={e=>{e.target.style.borderColor="var(--gold)";e.target.style.color="var(--gold)";}} onMouseLeave={e=>{e.target.style.borderColor="rgba(201,168,76,.2)";e.target.style.color="var(--gm)";}}>← Vissza</button>
@@ -993,7 +1261,7 @@ function MiniGamesTab(){
     {/* Carousel */}
     <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:"10px 0",overflow:"hidden",position:"relative"}} onTouchStart={swipeStart} onTouchEnd={swipeEnd}>
       {carouselIdx>0&&<button onClick={()=>setCarouselIdx(i=>i-1)} style={{position:"absolute",left:"15%",zIndex:5,width:40,height:40,borderRadius:"50%",background:"rgba(201,168,76,.08)",border:"1px solid rgba(201,168,76,.25)",color:"var(--gold)",fontSize:"1.1rem",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}>←</button>}
-      <div style={{display:"flex",transition:"transform .4s cubic-bezier(.22,1,.36,1)",transform:`translateX(calc(${-carouselIdx} * (min(260px,70vw) + 16px)))`,paddingLeft:"calc(50% - min(130px,35vw))",gap:16}}>
+      <div style={{display:"flex",transition:"transform .4s cubic-bezier(.22,1,.36,1)",transform:`translateX(calc(50% - min(130px,35vw) - ${carouselIdx} * (min(260px,70vw) + 16px)))`,gap:16}}>
         {games.map((g,i)=>{
           const isActive=i===carouselIdx;
           return <div key={g.id} onClick={()=>isActive&&setActiveGame(g.id)} style={{minWidth:"min(260px,70vw)",maxWidth:280,padding:"28px 20px",background:isActive?"rgba(201,168,76,.06)":"rgba(0,0,0,.2)",border:`1px solid ${isActive?g.color:"rgba(201,168,76,.1)"}`,display:"flex",flexDirection:"column",alignItems:"center",gap:14,cursor:isActive?"pointer":"default",transition:"all .35s",transform:isActive?"scale(1)":"scale(.88)",opacity:isActive?1:.4,boxShadow:isActive?`0 0 30px ${g.color}22`:"none",flexShrink:0}}>
@@ -1007,9 +1275,56 @@ function MiniGamesTab(){
       {carouselIdx<games.length-1&&<button onClick={()=>setCarouselIdx(i=>i+1)} style={{position:"absolute",right:"15%",zIndex:5,width:40,height:40,borderRadius:"50%",background:"rgba(201,168,76,.08)",border:"1px solid rgba(201,168,76,.25)",color:"var(--gold)",fontSize:"1.1rem",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}>→</button>}
     </div>
     {/* Dots */}
-    <div style={{display:"flex",justifyContent:"center",gap:8,padding:"10px 0 16px",flexShrink:0}}>
+    <div style={{display:"flex",justifyContent:"center",gap:8,padding:"10px 0 8px",flexShrink:0}}>
       {games.map((g,i)=><button key={i} onClick={()=>setCarouselIdx(i)} style={{width:i===carouselIdx?20:8,height:8,borderRadius:4,background:i===carouselIdx?g.color:"rgba(201,168,76,.15)",border:"none",cursor:"pointer",transition:"all .3s"}}/>)}
     </div>
+    {/* Global tavern chat */}
+    <TavernChat/>
+  </div>;
+}
+
+// ── AVATAR SYSTEM ─────────────────────────────────────────────────────────────
+const AVATAR_FRAMES=[
+  {id:"default",name:"Egyszerű",border:"2px solid",req:null},
+  {id:"gold",name:"Arany",border:"2.5px solid",glow:"0 0 12px",req:"100 pont"},
+  {id:"rune",name:"Rúna",border:"2.5px dashed",glow:"0 0 16px",req:"3 feladat"},
+  {id:"fire",name:"Tűz",border:"3px double",glow:"0 0 20px",req:"500 pont"},
+  {id:"mithril",name:"Mithril",border:"2.5px solid",glow:"0 0 18px",innerRing:true,req:"1000 pont"},
+  {id:"dragon",name:"Sárkány",border:"3px solid",glow:"0 0 24px",pulse:true,req:"10 feladat"},
+  {id:"legendary",name:"Legendás",border:"3px double",glow:"0 0 30px",innerRing:true,pulse:true,req:"2000 pont"},
+];
+const AVATAR_TITLES=[
+  {id:"wanderer",title:"Vándor",req:null},
+  {id:"adventurer",title:"Kalandor",req:"1 feladat"},
+  {id:"pathfinder",title:"Ösvénykereső",req:"5 feladat"},
+  {id:"champion",title:"Bajnok",req:"10 feladat"},
+  {id:"dragonslayer",title:"Sárkányölő",req:"15 feladat"},
+  {id:"sage",title:"Bölcs",req:"1000 pont"},
+  {id:"legend",title:"Legenda",req:"2500 pont"},
+  {id:"fellowshipleader",title:"Szövetség Vezére",req:"3 barát"},
+];
+const _isAvatarUnlocked=(req,stats)=>{
+  if(!req)return true;
+  const m=req.match(/^(\d+)\s+(pont|feladat|barát)$/);
+  if(!m)return false;
+  const n=parseInt(m[1]);
+  if(m[2]==="pont")return stats.score>=n;
+  if(m[2]==="feladat")return stats.completed>=n;
+  if(m[2]==="barát")return stats.friends>=n;
+  return false;
+};
+const _getAvatarConfig=()=>{try{return JSON.parse(localStorage.getItem("hobbit_avatar")||"{}");}catch{return {};}};
+const _saveAvatarConfig=(cfg)=>{localStorage.setItem("hobbit_avatar",JSON.stringify(cfg));};
+
+function AvatarDisplay({race,frame,size=56,showPulse=true}){
+  const f=AVATAR_FRAMES.find(a=>a.id===frame)||AVATAR_FRAMES[0];
+  const fs=size>=48?"1.6rem":size>=32?"1rem":".7rem";
+  return <div style={{position:"relative",width:size,height:size}}>
+    {f.pulse&&showPulse&&<div style={{position:"absolute",inset:-4,borderRadius:"50%",border:`1.5px solid ${race.color}44`,animation:"avatarPulse 3s ease-in-out infinite","--rc":race.color}}/>}
+    <div style={{width:size,height:size,borderRadius:"50%",border:`${f.border} ${race.color}`,background:`radial-gradient(circle,${race.color}33,rgba(0,0,0,.8))`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:fs,boxShadow:f.glow?`${f.glow} ${race.color}44`:undefined}}>
+      {race.icon}
+    </div>
+    {f.innerRing&&<div style={{position:"absolute",inset:3,borderRadius:"50%",border:`1px solid ${race.color}33`,pointerEvents:"none"}}/>}
   </div>;
 }
 
@@ -1019,6 +1334,26 @@ const getRank=(score)=>RANK_TIERS.find(r=>score>=r.min)||RANK_TIERS[RANK_TIERS.l
 const ELO_TIERS=[{min:2000,label:"Középföld Bajnoka",icon:"👑",color:"#FFD700"},{min:1600,label:"Legendás Harcos",icon:"⚔️",color:"#C9A84C"},{min:1200,label:"Tapasztalt Kalandor",icon:"🛡️",color:"#A0A0C0"},{min:800,label:"Újonc Vándor",icon:"🗡️",color:"#A0522D"},{min:0,label:"Kezdő",icon:"🌱",color:"#6B8C3E"}];
 const getEloRank=(elo)=>ELO_TIERS.find(r=>elo>=r.min)||ELO_TIERS[ELO_TIERS.length-1];
 const DAILY_CHALLENGES=[{icon:"⚔️",task:"Teljesíts 2 feladatot ma",pts:50},{icon:"💍",task:"Szerezz 200 pontot egyetlen feladatban",pts:80},{icon:"🧙",task:"Próbáld ki a Rúna Dekódolót",pts:60},{icon:"🗺️",task:"Teljesítsd a Térkép 3 feladatát",pts:100},{icon:"⏱️",task:"Teljesíts egy feladatot gyorsan",pts:70}];
+
+// ── SEASONAL EVENTS ──────────────────────────────────────────────────────────
+const SEASONAL_EVENTS=[
+  {id:"yule",name:"Yule-ünnep",icon:"🎄",desc:"Középfölde téli ünnepe — a Shire-i hobbitok legmelegebb időszaka!",color:"#C62828",glow:"rgba(198,40,40,.4)",bg:"linear-gradient(135deg,rgba(198,40,40,.08),rgba(27,94,32,.06))",border:"rgba(198,40,40,.3)",
+    match:d=>d.getMonth()===11&&d.getDate()>=15||d.getMonth()===0&&d.getDate()<=6,
+    challenges:[{icon:"🎁",task:"Teljesíts 3 feladatot az ünnep alatt",pts:120,key:"yule_3tasks"},{icon:"⛄",task:"Érj el 90%+ pontot bármely feladatban",pts:100,key:"yule_perfect"},{icon:"🕯️",task:"Játssz egy társasjátékot",pts:80,key:"yule_game"}]},
+  {id:"spring",name:"Tavasz Ébredése",icon:"🌸",desc:"Az olvadás elhozta a friss szellőt — Fangorn erdő újjáéled!",color:"#2E7D32",glow:"rgba(46,125,50,.4)",bg:"linear-gradient(135deg,rgba(46,125,50,.06),rgba(129,199,132,.04))",border:"rgba(46,125,50,.3)",
+    match:d=>d.getMonth()>=2&&d.getMonth()<=4,
+    challenges:[{icon:"🌱",task:"Teljesítsd az első 5 feladatot",pts:100,key:"spring_5tasks"},{icon:"🌻",task:"Gyűjts össze 500 pontot",pts:120,key:"spring_500pts"},{icon:"🦋",task:"Próbáld ki mind a 3 mini-játékot",pts:90,key:"spring_minigames"}]},
+  {id:"midsummer",name:"Középnyári Csillagok",icon:"✨",desc:"A leghosszabb nap — a tündék ünnepelnek a csillagok alatt!",color:"#F9A825",glow:"rgba(249,168,37,.4)",bg:"linear-gradient(135deg,rgba(249,168,37,.06),rgba(255,202,40,.04))",border:"rgba(249,168,37,.3)",
+    match:d=>d.getMonth()>=5&&d.getMonth()<=7,
+    challenges:[{icon:"☀️",task:"Teljesíts 5 feladatot a nyári szezonban",pts:110,key:"summer_5tasks"},{icon:"🏹",task:"Nyerj az Íjász mini-játékban",pts:100,key:"summer_archery"},{icon:"⭐",task:"Szerezz összesen 1000 pontot",pts:150,key:"summer_1000pts"}]},
+  {id:"harvest",name:"Aratási Fesztivál",icon:"🍂",desc:"A hobbitok hálát adnak a bőséges termésért — eljött a lakomák ideje!",color:"#E65100",glow:"rgba(230,81,0,.4)",bg:"linear-gradient(135deg,rgba(230,81,0,.06),rgba(255,152,0,.04))",border:"rgba(230,81,0,.3)",
+    match:d=>d.getMonth()>=8&&d.getMonth()<=10,
+    challenges:[{icon:"🍺",task:"Teljesíts 4 feladatot az őszi szezonban",pts:100,key:"harvest_4tasks"},{icon:"🎃",task:"Találd meg mind a 8 aranyat a Kincskeresőben",pts:120,key:"harvest_treasure"},{icon:"🍄",task:"Válaszolj helyesen 6 riddle-re egymás után",pts:110,key:"harvest_riddles"}]},
+  {id:"durin",name:"Durin Napja",icon:"⚒️",desc:"A törpék legnagyobb ünnepe — Erebor fényei ragyognak!",color:"#6D4C41",glow:"rgba(109,76,65,.4)",bg:"linear-gradient(135deg,rgba(109,76,65,.08),rgba(161,136,127,.04))",border:"rgba(109,76,65,.3)",
+    match:d=>d.getMonth()===11&&d.getDate()>=1&&d.getDate()<=14,
+    challenges:[{icon:"⛏️",task:"Teljesíts 3 feladatot Durin Napja alatt",pts:100,key:"durin_3tasks"},{icon:"💎",task:"Érj el 250+ pontot egy feladatban",pts:130,key:"durin_highscore"},{icon:"🔥",task:"Csatlakozz vagy alapíts klánot",pts:80,key:"durin_clan"}]},
+];
+const _getActiveSeason=(d=new Date())=>SEASONAL_EVENTS.find(s=>s.match(d))||null;
 
 function LeaderboardPanel({leaderboard,myName}){
   const [mode,setMode]=useState("score"); // "score" or "elo"
@@ -1078,7 +1413,7 @@ function BarChart({data,color}){
   </div>;
 }
 
-function ProfileTab({user,completed,scores,onInviteFriend}){
+function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
   const race=RACES.find(r=>r.id===user?.race)||RACES[3];
   const totalScore=Object.values(scores).reduce((a,b)=>a+b,0);
   const pct=Math.round((completed.length/TASKS.length)*100);
@@ -1095,9 +1430,14 @@ function ProfileTab({user,completed,scores,onInviteFriend}){
   const [bio,setBio]=useState(()=>localStorage.getItem("hobbit_bio")||"");
   const [bioEdit,setBioEdit]=useState("");
   const [selectedRace,setSelectedRace]=useState(user?.race||"human");
+  const [avatarCfg,setAvatarCfg]=useState(_getAvatarConfig);
+  const [editFrame,setEditFrame]=useState(avatarCfg.frame||"default");
+  const [editTitle,setEditTitle]=useState(avatarCfg.title||"wanderer");
   const todayKey=new Date().toISOString().slice(0,10);
   const [dailyDone,setDailyDone]=useState(()=>JSON.parse(localStorage.getItem("hobbit_daily_"+todayKey)||"[]"));
   const dailyChallenge=DAILY_CHALLENGES[new Date().getDay()%DAILY_CHALLENGES.length];
+  const activeSeason=_getActiveSeason();
+  const [seasonDone,setSeasonDone]=useState(()=>{try{return JSON.parse(localStorage.getItem("hobbit_season_done")||"[]");}catch{return[];}});
   const myName=user?.adventureName;
   // Chat state
   const [chatWith,setChatWith]=useState(null);
@@ -1183,20 +1523,10 @@ function ProfileTab({user,completed,scores,onInviteFriend}){
     } catch(e){}
   },[myName,totalScore,completed.length]);
 
-  const achivs=[
-    {icon:"🗡️",name:"Első Vér",desc:"1 feladat",done:completed.length>=1,progress:{current:Math.min(completed.length,1),target:1}},
-    {icon:"🏔️",name:"Hegymászó",desc:"5 feladat",done:completed.length>=5,progress:{current:Math.min(completed.length,5),target:5}},
-    {icon:"💍",name:"Gyűrű Hordozó",desc:"10 feladat",done:completed.length>=10,progress:{current:Math.min(completed.length,10),target:10}},
-    {icon:"🐉",name:"Sárkányölő",desc:"Mind a 15",done:completed.length>=15,progress:{current:Math.min(completed.length,15),target:15}},
-    {icon:"⭐",name:"Ezer Pont",desc:"1000 pont",done:totalScore>=1000,progress:{current:Math.min(totalScore,1000),target:1000}},
-    {icon:"✨",name:"Arany Rang",desc:"2000 pont",done:totalScore>=2000,progress:{current:Math.min(totalScore,2000),target:2000}},
-    {icon:"🧙",name:"Varázsló Barát",desc:"1 barát",done:friends.length>=1,progress:{current:Math.min(friends.length,1),target:1}},
-    {icon:"🤝",name:"Szövetségkötő",desc:"3 barát",done:friends.length>=3,progress:{current:Math.min(friends.length,3),target:3}},
-    {icon:"⚡",name:"Villámgyors",desc:"Napi kihívás",done:dailyDone.length>0},
-    {icon:"🌟",name:"Legendás",desc:"2500 pont",done:totalScore>=2500,progress:{current:Math.min(totalScore,2500),target:2500}},
-  ];
+  const achStats=_getAchievementStats(completed,scores,friends.length,dailyDone.length);
+  const achivs=ACHIEVEMENTS.map(a=>({...a,done:a.check(achStats),progress:a.progress?.(achStats)}));
 
-  const saveBio=()=>{localStorage.setItem("hobbit_bio",bioEdit);setBio(bioEdit);const cu=JSON.parse(localStorage.getItem("hobbit_current")||"{}");cu.race=selectedRace;localStorage.setItem("hobbit_current",JSON.stringify(cu));setEditMode(false);};
+  const saveBio=()=>{localStorage.setItem("hobbit_bio",bioEdit);setBio(bioEdit);const cu=JSON.parse(localStorage.getItem("hobbit_current")||"{}");cu.race=selectedRace;localStorage.setItem("hobbit_current",JSON.stringify(cu));const newCfg={frame:editFrame,title:editTitle};_saveAvatarConfig(newCfg);setAvatarCfg(newCfg);setEditMode(false);};
 
   const sendFriendRequest=()=>{
     const name=search.trim();
@@ -1281,6 +1611,7 @@ function ProfileTab({user,completed,scores,onInviteFriend}){
   const sendMessage=()=>{
     const text=msgInput.trim();
     if(!text||!chatWith||!myName) return;
+    sfx.click();
     try{
       const {getDatabase,ref:fbRef,push,set}=window.__fbDB||{};
       if(!getDatabase) return;
@@ -1294,25 +1625,100 @@ function ProfileTab({user,completed,scores,onInviteFriend}){
 
   const claimDaily=()=>{const next=[...dailyDone,dailyChallenge.task];setDailyDone(next);localStorage.setItem("hobbit_daily_"+todayKey,JSON.stringify(next));};
   const isDailyClaimed=dailyDone.includes(dailyChallenge.task);
+  const _blockedNames=["nigro nigro","dildo","zsákos"];
   const leaderboard=(allUsers.length>0
-    ?allUsers.map(u=>({name:u.name,race:u.race||"human",score:u.score||0,tasks:u.tasks||0,elo:u.elo||1000,isMe:u.name===myName}))
+    ?allUsers.filter(u=>!_blockedNames.includes(u.name?.toLowerCase())).map(u=>({name:u.name,race:u.race||"human",score:u.score||0,tasks:u.tasks||0,elo:u.elo||1000,isMe:u.name===myName}))
     :[{name:myName||"Te",race:user?.race||"human",score:totalScore,tasks:completed.length,elo:myElo,isMe:true}]
   ).sort((a,b)=>b.score-a.score);
 
-  const TABS2=[{id:"stats",label:"Statok",icon:"📊"},{id:"friends",label:"Barátok",icon:"⚔️"},{id:"leaderboard",label:"Ranglétra",icon:"🏆"},{id:"daily",label:"Napi",icon:"☀️"}];
+  const [myClan,setMyClan]=useState(null);
+  const [clanInput,setClanInput]=useState("");
+  const [clanMsg,setClanMsg]=useState(null);
+
+  // Load clan data
+  useEffect(()=>{
+    if(!myName)return;
+    try{
+      const {getDatabase,ref:fbRef,onValue,off}=window.__fbDB||{};
+      if(!getDatabase)return;
+      const db=getDatabase();
+      const clanRef=fbRef(db,`users/${myName}/clan`);
+      onValue(clanRef,(snap)=>{
+        const cid=snap.val();
+        if(!cid){setMyClan(null);return;}
+        const cRef=fbRef(db,`clans/${cid}`);
+        onValue(cRef,(cs)=>{setMyClan(cs.val()?{...cs.val(),id:cid}:null);},{onlyOnce:true});
+      });
+      return()=>off(clanRef);
+    }catch(e){}
+  },[myName]);
+
+  const createClan=()=>{
+    const name=clanInput.trim();
+    if(!name||name.length<2){setClanMsg({ok:false,t:"A klán neve min. 2 karakter!"});return;}
+    try{
+      const {getDatabase,ref:fbRef,push,set,update}=window.__fbDB||{};
+      if(!getDatabase)return;
+      const db=getDatabase();
+      const clanRef=push(fbRef(db,"clans"));
+      const clanData={name,leader:myName,created:Date.now(),members:{[myName]:{name:myName,race:user?.race||"human",score:totalScore,joined:Date.now()}}};
+      set(clanRef,clanData);
+      set(fbRef(db,`users/${myName}/clan`),clanRef.key);
+      setMyClan({...clanData,id:clanRef.key});
+      setClanInput("");setClanMsg({ok:true,t:`"${name}" klán létrehozva!`});
+      setTimeout(()=>setClanMsg(null),2500);
+    }catch(e){setClanMsg({ok:false,t:"Hiba történt!"});}
+  };
+
+  const joinClan=()=>{
+    const cid=clanInput.trim();
+    if(!cid){setClanMsg({ok:false,t:"Írd be a klán kódját!"});return;}
+    try{
+      const {getDatabase,ref:fbRef,get:fbGet,set,update}=window.__fbDB||{};
+      if(!getDatabase)return;
+      const db=getDatabase();
+      fbGet(fbRef(db,`clans/${cid}`)).then(snap=>{
+        if(!snap.exists()){setClanMsg({ok:false,t:"Nincs ilyen klán!"});return;}
+        const clan=snap.val();
+        const members=Object.keys(clan.members||{});
+        if(members.length>=10){setClanMsg({ok:false,t:"A klán tele van! (max 10)"});return;}
+        update(fbRef(db,`clans/${cid}/members/${myName}`),{name:myName,race:user?.race||"human",score:totalScore,joined:Date.now()});
+        set(fbRef(db,`users/${myName}/clan`),cid);
+        setMyClan({...clan,id:cid});
+        setClanInput("");setClanMsg({ok:true,t:`Csatlakoztál: "${clan.name}"!`});
+        setTimeout(()=>setClanMsg(null),2500);
+      });
+    }catch(e){setClanMsg({ok:false,t:"Hiba történt!"});}
+  };
+
+  const leaveClan=()=>{
+    if(!myClan)return;
+    try{
+      const {getDatabase,ref:fbRef,remove,set}=window.__fbDB||{};
+      if(!getDatabase)return;
+      const db=getDatabase();
+      remove(fbRef(db,`clans/${myClan.id}/members/${myName}`));
+      remove(fbRef(db,`users/${myName}/clan`));
+      setMyClan(null);
+    }catch(e){}
+  };
+
+  const claimSeason=(key,pts)=>{if(seasonDone.includes(key))return;const next=[...seasonDone,key];setSeasonDone(next);localStorage.setItem("hobbit_season_done",JSON.stringify(next));sfx.achievement?.();onAddScore?.("season_"+key,pts);};
+  const TABS2=[{id:"stats",label:"Statok",icon:"📊"},{id:"friends",label:"Barátok",icon:"⚔️"},{id:"clan",label:"Klán",icon:"🛡️"},{id:"leaderboard",label:"Ranglétra",icon:"🏆"},{id:"daily",label:"Napi",icon:"☀️"},...(activeSeason?[{id:"season",label:activeSeason.name,icon:activeSeason.icon}]:[])];
 
   return <div style={{flex:1,display:"flex",flexDirection:"column",minHeight:0,overflowY:"auto"}}>
     {/* Header */}
     <div style={{padding:"16px 16px 12px",background:"linear-gradient(180deg,rgba(201,168,76,.06),transparent)",borderBottom:"1px solid rgba(201,168,76,.1)"}}>
       <div style={{display:"flex",gap:12,alignItems:"center"}}>
         <div style={{position:"relative",flexShrink:0}}>
-          <div className="avatar-glow" style={{width:56,height:56,borderRadius:"50%",border:`2px solid ${race.color}`,background:`radial-gradient(circle,${race.color}33,rgba(0,0,0,.8))`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.6rem",boxShadow:`0 0 18px ${race.color}44`,animation:"avatarPulse 3s ease-in-out infinite","--rc":race.color}}>{race.icon}</div>
-          <button aria-label="Profil szerkesztése" onClick={()=>{setEditMode(true);setBioEdit(bio);setSelectedRace(user?.race||"human");}} style={{position:"absolute",bottom:-2,right:-2,width:20,height:20,borderRadius:"50%",background:"rgba(201,168,76,.15)",border:"1px solid rgba(201,168,76,.4)",color:"var(--gold)",fontSize:".6rem",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>✏️</button>
+          <AvatarDisplay race={race} frame={avatarCfg.frame||"default"} size={56}/>
+          <button aria-label="Profil szerkesztése" onClick={()=>{setEditMode(true);setBioEdit(bio);setSelectedRace(user?.race||"human");setEditFrame(avatarCfg.frame||"default");setEditTitle(avatarCfg.title||"wanderer");}} style={{position:"absolute",bottom:-2,right:-2,width:20,height:20,borderRadius:"50%",background:"rgba(201,168,76,.15)",border:"1px solid rgba(201,168,76,.4)",color:"var(--gold)",fontSize:".6rem",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>✏️</button>
         </div>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"clamp(.85rem,2.5vw,1.1rem)",color:"var(--gold)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user?.adventureName||"Ismeretlen"}</div>
           <div style={{display:"flex",alignItems:"center",gap:6,marginTop:2,flexWrap:"wrap"}}>
             <span style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",color:race.color,letterSpacing:".06em",textTransform:"uppercase"}}>{race.id}</span>
+            {(()=>{const t=AVATAR_TITLES.find(t=>t.id===(avatarCfg.title||"wanderer"));return t?<span style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:"var(--gold)",background:"rgba(201,168,76,.08)",border:"1px solid rgba(201,168,76,.25)",borderRadius:12,padding:"1px 8px",letterSpacing:".05em",whiteSpace:"nowrap"}}>"{t.title}"</span>:null;})()}
             <span style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:rank.color,background:`${rank.color}15`,border:`1px solid ${rank.color}33`,borderRadius:12,padding:"1px 8px",letterSpacing:".05em",whiteSpace:"nowrap"}}>{rank.label}</span>
             <span style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:eloRank.color,background:`${eloRank.color}15`,border:`1px solid ${eloRank.color}33`,borderRadius:12,padding:"1px 8px",letterSpacing:".05em",whiteSpace:"nowrap"}}>{eloRank.icon} {myElo} ELO</span>
           </div>
@@ -1331,8 +1737,8 @@ function ProfileTab({user,completed,scores,onInviteFriend}){
     </div>
 
     {/* Edit modal */}
-    {editMode&&<div style={{position:"fixed",inset:0,zIndex:200,background:"rgba(4,3,2,.92)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-      <div style={{width:"100%",maxWidth:400,background:"linear-gradient(162deg,rgba(20,15,11,.99),rgba(8,6,4,.99))",border:"1px solid rgba(201,168,76,.22)",padding:20,display:"flex",flexDirection:"column",gap:14}}>
+    {editMode&&<div style={{position:"fixed",inset:0,zIndex:200,background:"rgba(4,3,2,.92)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,overflowY:"auto"}}>
+      <div style={{width:"100%",maxWidth:400,maxHeight:"90vh",overflowY:"auto",background:"linear-gradient(162deg,rgba(20,15,11,.99),rgba(8,6,4,.99))",border:"1px solid rgba(201,168,76,.22)",padding:20,display:"flex",flexDirection:"column",gap:14}}>
         <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1rem",color:"var(--gold)",textAlign:"center"}}>Profil Szerkesztése</div>
         <div>
           <div style={{fontFamily:"'Cinzel',serif",fontSize:".6rem",color:"var(--gm)",letterSpacing:".12em",textTransform:"uppercase",marginBottom:8}}>Faj választás</div>
@@ -1341,6 +1747,28 @@ function ProfileTab({user,completed,scores,onInviteFriend}){
               <span style={{fontSize:"1.2rem"}}>{r.icon}</span>
               <span style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:selectedRace===r.id?r.color:"var(--gm)"}}>{r.id}</span>
             </button>)}
+          </div>
+        </div>
+        {/* Avatar frame */}
+        <div>
+          <div style={{fontFamily:"'Cinzel',serif",fontSize:".6rem",color:"var(--gm)",letterSpacing:".12em",textTransform:"uppercase",marginBottom:8}}>Avatar keret</div>
+          <div style={{display:"flex",gap:8,overflowX:"auto",padding:"4px 0"}}>
+            {AVATAR_FRAMES.map(f=>{const selRace=RACES.find(r=>r.id===selectedRace)||RACES[3];const unlocked=_isAvatarUnlocked(f.req,{completed:completed.length,score:totalScore,friends:friends.length});
+              return <button key={f.id} onClick={()=>unlocked&&setEditFrame(f.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,padding:"6px 8px",background:editFrame===f.id?"rgba(201,168,76,.12)":"rgba(0,0,0,.3)",border:`1px solid ${editFrame===f.id?"var(--gold)":"rgba(201,168,76,.1)"}`,cursor:unlocked?"pointer":"not-allowed",opacity:unlocked?1:.35,minWidth:60}}>
+                <AvatarDisplay race={selRace} frame={f.id} size={32} showPulse={false}/>
+                <span style={{fontFamily:"'Cinzel',serif",fontSize:".45rem",color:editFrame===f.id?"var(--gold)":"var(--gm)",whiteSpace:"nowrap"}}>{f.name}</span>
+                {!unlocked&&<span style={{fontFamily:"'Cinzel',serif",fontSize:".38rem",color:"var(--gm)",whiteSpace:"nowrap"}}>{f.req}</span>}
+              </button>;
+            })}
+          </div>
+        </div>
+        {/* Avatar title */}
+        <div>
+          <div style={{fontFamily:"'Cinzel',serif",fontSize:".6rem",color:"var(--gm)",letterSpacing:".12em",textTransform:"uppercase",marginBottom:6}}>Cím</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+            {AVATAR_TITLES.map(t=>{const unlocked=_isAvatarUnlocked(t.req,{completed:completed.length,score:totalScore,friends:friends.length});
+              return <button key={t.id} onClick={()=>unlocked&&setEditTitle(t.id)} style={{padding:"4px 10px",background:editTitle===t.id?"rgba(201,168,76,.12)":"rgba(0,0,0,.2)",border:`1px solid ${editTitle===t.id?"var(--gold)":"rgba(201,168,76,.1)"}`,color:editTitle===t.id?"var(--gold)":unlocked?"var(--text)":"var(--gm)",fontFamily:"'Cinzel',serif",fontSize:".55rem",cursor:unlocked?"pointer":"not-allowed",opacity:unlocked?1:.35,letterSpacing:".04em"}}>"{t.title}"{!unlocked&&<span style={{fontSize:".4rem",color:"var(--gm)",marginLeft:4}}>{t.req}</span>}</button>;
+            })}
           </div>
         </div>
         <div>
@@ -1500,6 +1928,67 @@ function ProfileTab({user,completed,scores,onInviteFriend}){
     {/* LEADERBOARD */}
     {tab==="leaderboard"&&<LeaderboardPanel leaderboard={leaderboard} myName={myName}/>}
 
+    {/* CLAN */}
+    {tab==="clan"&&<div style={{padding:"14px 12px",display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",letterSpacing:".16em",color:"var(--gm)",textTransform:"uppercase",textAlign:"center"}}>— Klánok & Csapatok —</div>
+      {clanMsg&&<div style={{padding:"8px 12px",background:clanMsg.ok?"rgba(102,187,106,.08)":"rgba(229,57,53,.08)",border:`1px solid ${clanMsg.ok?"rgba(102,187,106,.3)":"rgba(229,57,53,.3)"}`,color:clanMsg.ok?"#66BB6A":"#EF9A9A",fontFamily:"'EB Garamond',serif",fontSize:".85rem",textAlign:"center"}}>{clanMsg.t}</div>}
+      {!myClan?<>
+        {/* No clan — create or join */}
+        <div style={{padding:"18px 16px",background:"linear-gradient(135deg,rgba(201,168,76,.04),rgba(201,168,76,.01))",border:"1px solid rgba(201,168,76,.15)",display:"flex",flexDirection:"column",gap:14}}>
+          <div style={{fontFamily:"'Cinzel',serif",fontSize:".78rem",color:"var(--gold)",textAlign:"center"}}>Új Klán Alapítása</div>
+          <div style={{fontFamily:"'EB Garamond',serif",fontSize:".82rem",color:"var(--td)",textAlign:"center",fontStyle:"italic"}}>Adj nevet a klánodnak és hívd meg a barátaidat!</div>
+          <input value={clanInput} onChange={e=>setClanInput(e.target.value)} placeholder="Klán neve vagy kódja..." maxLength={30} style={{background:"rgba(0,0,0,.4)",border:"1px solid rgba(201,168,76,.18)",color:"var(--text)",fontFamily:"'EB Garamond',serif",fontSize:".9rem",padding:"10px 14px",outline:"none",borderRadius:4}}/>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={createClan} style={{flex:1,padding:"10px",background:"rgba(201,168,76,.1)",border:"1px solid rgba(201,168,76,.4)",color:"var(--gold)",fontFamily:"'Cinzel',serif",fontSize:".7rem",letterSpacing:".1em",cursor:"pointer",borderRadius:4}}>Alapítás ⚔️</button>
+            <button onClick={joinClan} style={{flex:1,padding:"10px",background:"rgba(58,122,139,.08)",border:"1px solid rgba(58,122,139,.35)",color:"#4DB6AC",fontFamily:"'Cinzel',serif",fontSize:".7rem",letterSpacing:".1em",cursor:"pointer",borderRadius:4}}>Csatlakozás 🛡️</button>
+          </div>
+        </div>
+        <div style={{fontFamily:"'EB Garamond',serif",fontSize:".78rem",color:"var(--gm)",textAlign:"center",fontStyle:"italic"}}>Kérd el egy barátod klán kódját a csatlakozáshoz, vagy alapíts sajátot!</div>
+      </>:<>
+        {/* Has clan — show info */}
+        <div style={{padding:"18px 16px",background:"linear-gradient(135deg,rgba(201,168,76,.06),rgba(201,168,76,.02))",border:"1px solid rgba(201,168,76,.22)",display:"flex",flexDirection:"column",gap:14}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div>
+              <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.05rem",color:"var(--gold)"}}>{myClan.name}</div>
+              <div style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:"var(--gm)",marginTop:2,letterSpacing:".08em"}}>Vezér: <span style={{color:"var(--gold)"}}>{myClan.leader}</span></div>
+            </div>
+            <div style={{textAlign:"center"}}>
+              <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.3rem",color:"var(--gold)"}}>{Object.keys(myClan.members||{}).length}</div>
+              <div style={{fontFamily:"'Cinzel',serif",fontSize:".45rem",color:"var(--gm)",letterSpacing:".08em"}}>TAG</div>
+            </div>
+          </div>
+          {/* Clan code */}
+          <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",background:"rgba(0,0,0,.3)",border:"1px solid rgba(201,168,76,.1)",borderRadius:4}}>
+            <span style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:"var(--gm)",flexShrink:0}}>KLÁN KÓD:</span>
+            <span style={{fontFamily:"'Courier New',monospace",fontSize:".72rem",color:"var(--gold)",letterSpacing:".08em",flex:1,overflow:"hidden",textOverflow:"ellipsis"}}>{myClan.id}</span>
+            <button onClick={()=>{navigator.clipboard?.writeText(myClan.id);setClanMsg({ok:true,t:"Kód másolva!"});setTimeout(()=>setClanMsg(null),1500);}} style={{padding:"4px 10px",background:"rgba(201,168,76,.08)",border:"1px solid rgba(201,168,76,.25)",color:"var(--gold)",fontFamily:"'Cinzel',serif",fontSize:".5rem",cursor:"pointer",borderRadius:3}}>Másolás</button>
+          </div>
+          {/* Members list */}
+          <div style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",color:"var(--gm)",letterSpacing:".12em",textTransform:"uppercase"}}>— Tagok —</div>
+          <div style={{display:"flex",flexDirection:"column",gap:4}}>
+            {Object.values(myClan.members||{}).sort((a,b)=>(b.score||0)-(a.score||0)).map((m,i)=>{
+              const mRace=RACES.find(r=>r.id===m.race)||RACES[3];
+              return <div key={m.name} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:m.name===myName?"rgba(201,168,76,.06)":"rgba(0,0,0,.15)",border:`1px solid ${m.name===myName?"rgba(201,168,76,.18)":"rgba(201,168,76,.06)"}`,borderRadius:4}}>
+                <span style={{fontFamily:"'Cinzel',serif",fontSize:".6rem",color:"var(--gm)",width:16,textAlign:"center"}}>{i+1}.</span>
+                <span style={{fontSize:"1rem"}}>{mRace.icon}</span>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontFamily:"'Cinzel',serif",fontSize:".78rem",color:m.name===myName?"var(--gold)":"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.name}{m.name===myClan.leader?" ⚜️":""}{m.name===myName?" (te)":""}</div>
+                </div>
+                <div style={{fontFamily:"'Cinzel',serif",fontSize:".65rem",color:"var(--gold)",flexShrink:0}}>{m.score||0} pt</div>
+              </div>;
+            })}
+          </div>
+          {/* Clan total score */}
+          <div style={{padding:"10px",background:"rgba(201,168,76,.04)",border:"1px solid rgba(201,168,76,.12)",textAlign:"center"}}>
+            <div style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:"var(--gm)",letterSpacing:".1em",textTransform:"uppercase"}}>Klán összpontszám</div>
+            <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.1rem",color:"var(--gold)",marginTop:4}}>{Object.values(myClan.members||{}).reduce((a,m)=>a+(m.score||0),0)}</div>
+          </div>
+          {/* Leave button */}
+          <button onClick={leaveClan} style={{padding:"10px",background:"rgba(229,57,53,.06)",border:"1px solid rgba(229,57,53,.2)",color:"#EF9A9A",fontFamily:"'Cinzel',serif",fontSize:".65rem",letterSpacing:".1em",cursor:"pointer",borderRadius:4,marginTop:4}}>Kilépés a klánból ✕</button>
+        </div>
+      </>}
+    </div>}
+
     {/* DAILY */}
     {tab==="daily"&&<div style={{padding:"14px 12px",display:"flex",flexDirection:"column",gap:12}}>
       <div style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",letterSpacing:".16em",color:"var(--gm)",textTransform:"uppercase"}}>— Mai Napi Kihívás —</div>
@@ -1527,6 +2016,46 @@ function ProfileTab({user,completed,scores,onInviteFriend}){
         {i===new Date().getDay()%DAILY_CHALLENGES.length&&<span style={{fontSize:".75rem",color:"var(--gold)"}}>◀</span>}
       </div>)}
     </div>}
+
+    {/* SEASONAL EVENT */}
+    {tab==="season"&&activeSeason&&<div style={{padding:"14px 12px",display:"flex",flexDirection:"column",gap:14}}>
+      {/* Season banner */}
+      <div style={{padding:"20px 16px",background:activeSeason.bg,border:`1px solid ${activeSeason.border}`,position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,transparent,${activeSeason.color},transparent)`}}/>
+        <div style={{textAlign:"center",marginBottom:8}}>
+          <span style={{fontSize:"2.2rem",display:"block",filter:`drop-shadow(0 0 12px ${activeSeason.glow})`,animation:"seasonIcon 3s ease-in-out infinite"}}>{activeSeason.icon}</span>
+        </div>
+        <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1rem",color:activeSeason.color,textAlign:"center",letterSpacing:".12em"}}>{activeSeason.name}</div>
+        <div style={{fontFamily:"'EB Garamond',serif",fontSize:".88rem",color:"var(--td)",textAlign:"center",fontStyle:"italic",marginTop:6,lineHeight:1.5}}>{activeSeason.desc}</div>
+        <div style={{position:"absolute",bottom:0,left:0,right:0,height:3,background:`linear-gradient(90deg,transparent,${activeSeason.color},transparent)`}}/>
+      </div>
+      {/* Season challenges */}
+      <div style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",letterSpacing:".14em",color:"var(--gm)",textTransform:"uppercase",textAlign:"center"}}>— Szezonális Kihívások —</div>
+      <div style={{fontFamily:"'EB Garamond',serif",fontSize:".78rem",color:"var(--gm)",textAlign:"center",fontStyle:"italic"}}>Teljesítsd a kihívásokat a szezon alatt bónusz pontokért!</div>
+      {activeSeason.challenges.map((ch,i)=>{
+        const done=seasonDone.includes(ch.key);
+        return <div key={ch.key} style={{padding:"14px 16px",background:done?"rgba(102,187,106,.06)":"rgba(0,0,0,.15)",border:`1px solid ${done?"rgba(102,187,106,.25)":activeSeason.border}`,display:"flex",flexDirection:"column",gap:10,borderRadius:4,transition:"all .3s"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <span style={{fontSize:"1.6rem",filter:done?"grayscale(.5)":"none"}}>{ch.icon}</span>
+            <div style={{flex:1}}>
+              <div style={{fontFamily:"'Cinzel',serif",fontSize:".78rem",color:done?"#66BB6A":"var(--text)"}}>{ch.task}</div>
+              <div style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",color:done?"#66BB6A":"var(--gm)",marginTop:3}}>Jutalom: <span style={{color:done?"#66BB6A":activeSeason.color}}>+{ch.pts} pont</span></div>
+            </div>
+            {done&&<span style={{fontSize:"1.3rem"}}>✅</span>}
+          </div>
+          {!done&&<button onClick={()=>claimSeason(ch.key,ch.pts)} style={{padding:"9px",background:`${activeSeason.color}15`,border:`1px solid ${activeSeason.color}55`,color:activeSeason.color,fontFamily:"'Cinzel',serif",fontSize:".68rem",letterSpacing:".1em",cursor:"pointer",borderRadius:3}}>Teljesítettem ✓</button>}
+        </div>;
+      })}
+      {/* Progress */}
+      <div style={{padding:"12px 16px",background:"rgba(0,0,0,.2)",border:`1px solid ${activeSeason.border}`,textAlign:"center"}}>
+        <div style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",color:"var(--gm)",letterSpacing:".1em",textTransform:"uppercase"}}>Szezonális haladás</div>
+        <div style={{marginTop:8,height:6,background:"rgba(255,255,255,.05)",borderRadius:3,overflow:"hidden"}}>
+          <div style={{height:"100%",width:`${Math.round(activeSeason.challenges.filter(c=>seasonDone.includes(c.key)).length/activeSeason.challenges.length*100)}%`,background:`linear-gradient(90deg,${activeSeason.color}88,${activeSeason.color})`,transition:"width .6s",borderRadius:3}}/>
+        </div>
+        <div style={{fontFamily:"'Cinzel',serif",fontSize:".62rem",color:activeSeason.color,marginTop:6}}>{activeSeason.challenges.filter(c=>seasonDone.includes(c.key)).length} / {activeSeason.challenges.length} teljesítve</div>
+        <div style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:"var(--gm)",marginTop:3}}>Bónusz pontok: +{activeSeason.challenges.filter(c=>seasonDone.includes(c.key)).reduce((a,c)=>a+c.pts,0)}</div>
+      </div>
+    </div>}
   </div>;
 }
 
@@ -1544,6 +2073,8 @@ export default function HobbitApp(){
   const [scores,setScores]=useState(()=>{try{return JSON.parse(localStorage.getItem("hobbit_task_scores")||"{}");}catch{return {};}});
   const [activeTask,setActiveTask]=useState(null);
   const [tab,setTab]=useState("map");
+  const [muted,setMuted]=useState(isMuted);
+  const [achievePopup,setAchievePopup]=useState(null);
   const [gameInvitePopup,setGameInvitePopup]=useState(null);
   const race=RACES.find(r=>r.id===user?.race)||RACES[3];
   const totalScore=Object.values(scores).reduce((a,b)=>a+b,0);
@@ -1561,6 +2092,7 @@ export default function HobbitApp(){
         const data=snap.val()||{};
         const invites=Object.values(data);
         if(invites.length>0&&!gameInvitePopup){
+          sfx.notify();
           setGameInvitePopup(invites[0]);
         }else if(invites.length===0){
           setGameInvitePopup(null);
@@ -1604,9 +2136,59 @@ export default function HobbitApp(){
   };
 
   const handleComplete=useCallback((taskId,score)=>{
+    sfx.success();
     setCompleted(c=>{const next=c.includes(taskId)?c:[...c,taskId];const cu=JSON.parse(localStorage.getItem("hobbit_current")||"{}");cu.completedTasks=next;localStorage.setItem("hobbit_current",JSON.stringify(cu));return next;});
     setScores(s=>{const next={...s,[taskId]:Math.max(s[taskId]||0,score)};localStorage.setItem("hobbit_task_scores",JSON.stringify(next));const cu=JSON.parse(localStorage.getItem("hobbit_current")||"{}");cu.score=Object.values(next).reduce((a,b)=>a+b,0);localStorage.setItem("hobbit_current",JSON.stringify(cu));return next;});
   },[]);
+
+  // ── Achievement unlock detection ──
+  const achieveQueueRef=useRef([]);
+  const achieveInitRef=useRef(false);
+  useEffect(()=>{
+    const stats=_getAchievementStats(completed,scores);
+    const nowUnlocked=ACHIEVEMENTS.filter(a=>a.check(stats)).map(a=>a.id);
+    const prev=JSON.parse(localStorage.getItem("hobbit_unlocked_achievements")||"[]");
+    if(!achieveInitRef.current){
+      // First render: seed localStorage without popup
+      achieveInitRef.current=true;
+      localStorage.setItem("hobbit_unlocked_achievements",JSON.stringify(nowUnlocked));
+      return;
+    }
+    const newlyUnlocked=nowUnlocked.filter(id=>!prev.includes(id));
+    if(newlyUnlocked.length>0){
+      localStorage.setItem("hobbit_unlocked_achievements",JSON.stringify(nowUnlocked));
+      const newAchievements=newlyUnlocked.map(id=>ACHIEVEMENTS.find(a=>a.id===id)).filter(Boolean);
+      achieveQueueRef.current=[...achieveQueueRef.current,...newAchievements];
+      if(!achievePopup&&achieveQueueRef.current.length>0){
+        sfx.achievement();
+        setAchievePopup(achieveQueueRef.current.shift());
+      }
+    }
+  },[completed,scores]);
+
+  useEffect(()=>{
+    if(!achievePopup)return;
+    const t=setTimeout(()=>{
+      setAchievePopup(null);
+      setTimeout(()=>{
+        if(achieveQueueRef.current.length>0){
+          sfx.achievement();
+          setAchievePopup(achieveQueueRef.current.shift());
+        }
+      },300);
+    },4000);
+    return()=>clearTimeout(t);
+  },[achievePopup]);
+
+  // ── Háttérzene váltás tab alapján ──
+  useEffect(()=>{
+    if(muted)return;
+    if(tab==="games")playMusic("tavern");
+    else if(tab==="board")playMusic("battle");
+    else playMusic("theme");
+  },[tab,muted]);
+
+  const switchTab=(id)=>{sfx.click();setTab(id);};
 
   const TABS=[{id:"map",icon:"🗺️",label:"Térkép"},{id:"games",icon:"🎮",label:"Minijátékok"},{id:"profile",icon:"👤",label:"Profil"},{id:"board",icon:"🎲",label:"Társasjáték"}];
 
@@ -1626,6 +2208,7 @@ export default function HobbitApp(){
             <span style={{fontFamily:"serif",color:"var(--gold)",opacity:.5}}>ᚠ</span>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <button onClick={()=>{toggleMute();setMuted(isMuted());}} style={{background:"none",border:"1px solid rgba(201,168,76,.15)",color:muted?"var(--gm)":"var(--gold)",width:28,height:28,borderRadius:"50%",cursor:"pointer",fontSize:".8rem",display:"flex",alignItems:"center",justifyContent:"center",opacity:muted?.5:1,transition:"all .2s"}} title={muted?"Hang bekapcsolása":"Hang kikapcsolása"}>{muted?"🔇":"🔊"}</button>
             <span style={{fontSize:".95rem"}}>{race.icon}</span>
             <span style={{fontFamily:"'Cinzel',serif",fontSize:".75rem",color:"var(--text)"}}>{user?.adventureName}</span>
             <span style={{fontFamily:"'Cinzel',serif",fontSize:".7rem",color:"var(--gold)",padding:"2px 8px",border:"1px solid rgba(201,168,76,.26)",background:"rgba(201,168,76,.05)"}}>{totalScore}pt</span>
@@ -1635,16 +2218,16 @@ export default function HobbitApp(){
         {/* Content */}
         <ErrorCatch>
         <div style={{flex:1,display:"flex",flexDirection:"column",minHeight:0,overflow:"hidden"}}>
-          {tab==="map"    &&<div key="map" className="tab-content" style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}><AdventureMap user={user} completed={completed} scores={scores} onSelect={setActiveTask}/></div>}
+          {tab==="map"    &&<div key="map" className="tab-content" style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}>{(()=>{const ss=_getActiveSeason();return ss?<button onClick={()=>{setTab("profile");}} style={{padding:"8px 16px",background:ss.bg,border:"none",borderBottom:`1px solid ${ss.border}`,display:"flex",alignItems:"center",justifyContent:"center",gap:10,cursor:"pointer",flexShrink:0,animation:"seasonBannerPulse 4s ease-in-out infinite"}}><span style={{fontSize:"1rem"}}>{ss.icon}</span><span style={{fontFamily:"'Cinzel',serif",fontSize:".62rem",color:ss.color,letterSpacing:".1em"}}>{ss.name} — Aktív!</span><span style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:"var(--gm)",letterSpacing:".06em"}}>Részletek ›</span></button>:null;})()}<AdventureMap user={user} completed={completed} scores={scores} onSelect={setActiveTask}/></div>}
           {tab==="games"  &&<div key="games" className="tab-content" style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}><MiniGamesTab/></div>}
-          {tab==="profile"&&<div key="profile" className="tab-content" style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}><ProfileTab user={user} completed={completed} scores={scores} onInviteFriend={(friendName)=>{setTab("board");}}/></div>}
+          {tab==="profile"&&<div key="profile" className="tab-content" style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}><ProfileTab user={user} completed={completed} scores={scores} onInviteFriend={(friendName)=>{setTab("board");}} onAddScore={(key,pts)=>{setScores(s=>{const next={...s,[key]:(s[key]||0)+pts};localStorage.setItem("hobbit_task_scores",JSON.stringify(next));const cu=JSON.parse(localStorage.getItem("hobbit_current")||"{}");cu.score=Object.values(next).reduce((a,b)=>a+b,0);localStorage.setItem("hobbit_current",JSON.stringify(cu));return next;});}}/></div>}
           {tab==="board"  &&<div key="board" className="tab-content" style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}><BoardGameTab user={user} onBack={()=>setTab("map")}/></div>}
         </div>
         </ErrorCatch>
 
         {/* Bottom tab bar */}
         <nav style={{display:"flex",borderTop:"1px solid rgba(201,168,76,.14)",background:"rgba(8,6,4,.95)",backdropFilter:"blur(10px)",flexShrink:0}}>
-          {TABS.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"10px 4px 8px",background:"transparent",border:"none",borderTop:`2px solid ${tab===t.id?"var(--gold)":"transparent"}`,color:tab===t.id?"var(--gold)":"var(--gm)",fontFamily:"'Cinzel',serif",fontSize:".6rem",letterSpacing:".07em",cursor:"pointer",transition:"all .2s",display:"flex",flexDirection:"column",alignItems:"center",gap:3,textTransform:"uppercase"}}>
+          {TABS.map(t=><button key={t.id} onClick={()=>switchTab(t.id)} style={{flex:1,padding:"10px 4px 8px",background:"transparent",border:"none",borderTop:`2px solid ${tab===t.id?"var(--gold)":"transparent"}`,color:tab===t.id?"var(--gold)":"var(--gm)",fontFamily:"'Cinzel',serif",fontSize:".6rem",letterSpacing:".07em",cursor:"pointer",transition:"all .2s",display:"flex",flexDirection:"column",alignItems:"center",gap:3,textTransform:"uppercase"}}>
             <span style={{fontSize:"1.2rem",filter:tab===t.id?"none":"grayscale(.5)",transition:"filter .2s"}}>{t.icon}</span>
             {t.label}
           </button>)}
@@ -1667,10 +2250,24 @@ export default function HobbitApp(){
             <div style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",color:"var(--gm)",marginTop:6,letterSpacing:".1em"}}>SZOBA: {gameInvitePopup.gameId}</div>
           </div>
           <div style={{display:"flex",gap:10}}>
-            <button onClick={()=>declineGameInvite(gameInvitePopup)} style={{flex:1,padding:"12px",background:"transparent",border:"1px solid rgba(229,57,53,.25)",color:"rgba(229,57,53,.7)",fontFamily:"'Cinzel',serif",fontSize:".75rem",cursor:"pointer",borderRadius:3,letterSpacing:".06em"}}>✗ Elutasít</button>
-            <button onClick={()=>acceptGameInvite(gameInvitePopup)} style={{flex:1,padding:"12px",background:"linear-gradient(135deg,rgba(102,187,106,.12),rgba(102,187,106,.05))",border:"1px solid rgba(102,187,106,.5)",color:"#66BB6A",fontFamily:"'Cinzel',serif",fontSize:".75rem",cursor:"pointer",borderRadius:3,letterSpacing:".06em",boxShadow:"0 0 18px rgba(102,187,106,.12)"}}>✓ Csatlakozás</button>
+            <button onClick={()=>{sfx.click();declineGameInvite(gameInvitePopup);}} style={{flex:1,padding:"12px",background:"transparent",border:"1px solid rgba(229,57,53,.25)",color:"rgba(229,57,53,.7)",fontFamily:"'Cinzel',serif",fontSize:".75rem",cursor:"pointer",borderRadius:3,letterSpacing:".06em"}}>✗ Elutasít</button>
+            <button onClick={()=>{sfx.success();acceptGameInvite(gameInvitePopup);}} style={{flex:1,padding:"12px",background:"linear-gradient(135deg,rgba(102,187,106,.12),rgba(102,187,106,.05))",border:"1px solid rgba(102,187,106,.5)",color:"#66BB6A",fontFamily:"'Cinzel',serif",fontSize:".75rem",cursor:"pointer",borderRadius:3,letterSpacing:".06em",boxShadow:"0 0 18px rgba(102,187,106,.12)"}}>✓ Csatlakozás</button>
           </div>
         </div>
+      </div>}
+
+      {/* Achievement unlock popup */}
+      {achievePopup&&<div style={{position:"fixed",top:20,left:"50%",transform:"translateX(-50%)",zIndex:600,width:"90%",maxWidth:360,animation:"achieveSlideIn .5s cubic-bezier(.22,1,.36,1) both",pointerEvents:"none"}}>
+        <div style={{background:"linear-gradient(135deg,rgba(18,14,8,.98),rgba(30,22,10,.98))",border:"1px solid rgba(201,168,76,.5)",borderRadius:6,padding:"16px 20px",display:"flex",alignItems:"center",gap:14,boxShadow:"0 0 40px rgba(201,168,76,.25), 0 8px 32px rgba(0,0,0,.6), inset 0 1px 0 rgba(201,168,76,.15)"}}>
+          <div style={{fontSize:"2.2rem",filter:"drop-shadow(0 0 12px rgba(201,168,76,.6))",animation:"achieveIconPop .6s cubic-bezier(.22,1,.36,1) both",flexShrink:0}}>{achievePopup.icon}</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",color:"var(--gm)",letterSpacing:".18em",textTransform:"uppercase",marginBottom:2}}>Jelvény feloldva!</div>
+            <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".95rem",color:"var(--gold)",textShadow:"0 0 12px rgba(201,168,76,.4)"}}>{achievePopup.name}</div>
+            <div style={{fontFamily:"'EB Garamond',serif",fontSize:".82rem",color:"var(--text)",fontStyle:"italic",marginTop:2,opacity:.8}}>{achievePopup.desc}</div>
+          </div>
+          <div style={{width:32,height:32,borderRadius:"50%",background:"rgba(201,168,76,.1)",border:"1px solid rgba(201,168,76,.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1rem",flexShrink:0,animation:"achieveStar 1s ease-in-out infinite"}}>🏆</div>
+        </div>
+        <div style={{height:3,marginTop:-1,borderRadius:"0 0 6px 6px",overflow:"hidden",background:"rgba(0,0,0,.3)"}}><div style={{height:"100%",background:"linear-gradient(90deg,var(--gold),#E8C96A)",animation:"achieveTimer 4s linear both"}}/></div>
       </div>}
     </div>
   </>;
@@ -1691,6 +2288,12 @@ body{background:var(--bg);}
 @keyframes modalIn{from{opacity:0;transform:scale(.95) translateY(10px)}to{opacity:1;transform:none}}
 @keyframes cardFlip{0%{transform:rotateY(0deg) scale(1)}50%{transform:rotateY(90deg) scale(1.05)}100%{transform:rotateY(0deg) scale(1)}}
 @keyframes gentlePop{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:scale(1)}}
+@keyframes achieveSlideIn{from{opacity:0;transform:translateX(-50%) translateY(-30px) scale(.9)}to{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}}
+@keyframes achieveIconPop{0%{transform:scale(0) rotate(-20deg)}60%{transform:scale(1.3) rotate(5deg)}100%{transform:scale(1) rotate(0)}}
+@keyframes achieveStar{0%,100%{transform:scale(1);opacity:.8}50%{transform:scale(1.15);opacity:1}}
+@keyframes achieveTimer{from{width:100%}to{width:0%}}
+@keyframes seasonIcon{0%,100%{transform:scale(1) rotate(0deg);filter:drop-shadow(0 0 8px currentColor)}50%{transform:scale(1.12) rotate(3deg);filter:drop-shadow(0 0 18px currentColor)}}
+@keyframes seasonBannerPulse{0%,100%{opacity:.85}50%{opacity:1}}
 .tab-content{animation:fadeSlideIn .35s cubic-bezier(.22,1,.36,1) both;}
 .card-flip{animation:cardFlip .35s ease both;}
 .gentle-pop{animation:gentlePop .3s cubic-bezier(.22,1,.36,1) both;}

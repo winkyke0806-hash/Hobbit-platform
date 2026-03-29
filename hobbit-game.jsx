@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { initializeApp, getApps } from "firebase/app";
+import { sfx } from "./hobbit-sounds.jsx";
 import { getDatabase, ref, set, get, onValue, update, push, remove, off, onDisconnect, serverTimestamp } from "firebase/database";
 
 const FB={apiKey:import.meta.env.VITE_FIREBASE_API_KEY,authDomain:import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,projectId:import.meta.env.VITE_FIREBASE_PROJECT_ID,databaseURL:import.meta.env.VITE_FIREBASE_DATABASE_URL};
@@ -715,6 +716,7 @@ function LobbyScreen({pid,user,friends,invites,onCreateGame,onJoinGame,onAcceptI
         <input value={code} onChange={e=>setCode(e.target.value.toUpperCase())} placeholder="Szoba kód..." maxLength={6}
           style={{flex:1,background:"rgba(0,0,0,.55)",border:"1px solid rgba(201,168,76,.22)",color:"var(--text)",fontFamily:"'Cinzel',serif",fontSize:".85rem",padding:"11px 14px",outline:"none",letterSpacing:".12em",borderRadius:2}}/>
         <button className="btn" onClick={()=>onJoinGame(code)} style={{padding:"11px 18px",background:"rgba(58,122,139,.12)",border:"1px solid rgba(58,122,139,.5)",color:"#4DADE2",fontFamily:"'Cinzel',serif",fontSize:".72rem",textTransform:"uppercase",borderRadius:2}}>Belép</button>
+        <button className="btn" onClick={()=>onJoinGame(code,true)} style={{padding:"11px 14px",background:"rgba(201,168,76,.05)",border:"1px solid rgba(201,168,76,.2)",color:"var(--dim)",fontFamily:"'Cinzel',serif",fontSize:".65rem",borderRadius:2}} title="Néző mód">👁</button>
       </div>
       {friends.length>0&&<div>
         <div style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",letterSpacing:".14em",color:"var(--dim)",textTransform:"uppercase",marginBottom:8}}>— Barátaim ({friends.length}) —</div>
@@ -768,6 +770,7 @@ function WaitingScreen({gameId,players,gameData,friends,pid,onStart,onInviteFrie
 function FinishedScreen({players,gameData,pid,onNewGame,onBack}){
   const isRanked=gameData?.ranked;const eloSnap=gameData?.eloSnapshot||{};const eloRes=gameData?.eloResults||{};
   const iWon=gameData?.winner===pid;
+  useEffect(()=>{if(iWon)sfx.achievement();else sfx.error();},[]);
   return <div style={{position:"fixed",inset:0,background:"radial-gradient(ellipse at 50% 40%,rgba(80,60,8,.35),rgba(3,2,1,1) 65%)",display:"flex",alignItems:"center",justifyContent:"center",padding:24,zIndex:10}}>
     <style>{CSS}</style>
     <div style={{width:"100%",maxWidth:420,background:"linear-gradient(170deg,rgba(22,16,7,.98),rgba(8,6,2,.99))",border:"1px solid rgba(201,168,76,.25)",padding:"34px 26px",display:"flex",flexDirection:"column",alignItems:"center",gap:18,borderRadius:3,boxShadow:"0 0 100px rgba(0,0,0,.95), 0 0 50px rgba(139,90,43,.1), inset 0 1px 0 rgba(201,168,76,.1)",animation:"zI .35s ease"}}>
@@ -976,14 +979,19 @@ export default function BoardGame({user,onBack}){
 
   const createGame=async()=>{const id=genId();await set(ref(db,`games/${id}`),newGD());setGameId(id);setScreen("waiting");};
 
-  const joinGame=async code=>{
+  const [spectating,setSpectating]=useState(false);
+
+  const joinGame=async(code,asSpectator=false)=>{
     const id=(code||"").trim().toUpperCase();if(!id){notify("Írd be a kódot!","#EF9A9A");return;}
     const snap=await get(ref(db,`games/${id}`));if(!snap.exists()){notify("Nincs ilyen szoba!","#EF9A9A");return;}
     const d=snap.val();
+    if(asSpectator){
+      setGameId(id);setSpectating(true);setScreen(d.status==="finished"?"finished":"playing");notify("Nézőként csatlakoztál! 👁","#B39DDB");return;
+    }
     if(d.status!=="waiting"){notify("A játék már elkezdődött!","#EF9A9A");return;}
     if(Object.keys(d.players||{}).length>=4){notify("A szoba tele van!","#EF9A9A");return;}
     await update(ref(db,`games/${id}/players/${pid}`),{name:pid,race:user?.race||"human",position:0,score:0,coins:50,cards:[],skipTurn:false,extraStep:0});
-    setGameId(id);setScreen("waiting");notify("Csatlakoztál!","#66BB6A");
+    setGameId(id);setSpectating(false);setScreen("waiting");notify("Csatlakoztál!","#66BB6A");
   };
 
   const acceptInvite=async inv=>{
@@ -1078,6 +1086,7 @@ export default function BoardGame({user,onBack}){
     }
     const hasExtraDice=(myData?.cards||[]).includes("extraDice");
     setRolling(true);
+    sfx.dice();
     // Show big center dice SPINNING
     setCenterDice({rolling:true,value:1,field:null,playerName:pid});
     await update(ref(db,`games/${gameId}/diceValues/${pid}`),{value:0,rolling:true});
@@ -1179,6 +1188,7 @@ export default function BoardGame({user,onBack}){
     const myData=gd.players?.[pid];
     const coins=myData?.coins||0;
     if(coins<item.price)return;
+    sfx.coin();
     // Instant effect items
     if(item.id==="arkenstone"){
       await update(ref(db,`games/${gameId}/players/${pid}`),{score:(myData?.score||0)+50,coins:coins-item.price});
@@ -1204,6 +1214,12 @@ export default function BoardGame({user,onBack}){
   if(screen==="lobby")return <LobbyScreen pid={pid} user={user} friends={friends} invites={invites} onCreateGame={createGame} onJoinGame={joinGame} onAcceptInvite={acceptInvite} onDeclineInvite={inv=>remove(ref(db,`users/${pid}/gameInvites/${inv.from}`))} onInviteFriend={inviteFriend} onRankedQueue={joinRankedQueue} myElo={myElo} notif={notif} onBack={onBack}/>;
   if(screen==="ranked_queue")return <RankedQueueScreen pid={pid} user={user} myElo={myElo} onCancel={cancelRankedQueue} notif={notif}/>;
   if(screen==="waiting")return <WaitingScreen gameId={gameId} players={players} gameData={gd} friends={friends} pid={pid} onStart={startGame} onInviteFriend={n=>inviteFriend(n,gameId)} onLeave={leaveGame} notif={notif}/>;
-  if(screen==="finished")return <FinishedScreen players={players} gameData={gd} pid={pid} onNewGame={resetGame} onBack={()=>{resetGame();if(onBack)onBack();}}/>;
-  return <PlayingScreen gd={gd} pid={pid} user={user} gameId={gameId} onRoll={rollDice} onEventResult={handleEvent} eventField={eventField} rolling={rolling} diceVals={diceVals} bursts={bursts} notif={notif} coins={myCoins} onBuyItem={buyItem} centerDice={centerDice} onLeave={handleLeaveAndBack}/>;
+  if(screen==="finished")return <FinishedScreen players={players} gameData={gd} pid={pid} onNewGame={resetGame} onBack={()=>{resetGame();if(onBack)onBack();}} spectating={spectating}/>;
+  return <>
+    {spectating&&<div style={{position:"fixed",top:8,left:"50%",transform:"translateX(-50%)",zIndex:200,padding:"5px 16px",background:"rgba(122,74,187,.15)",border:"1px solid rgba(122,74,187,.4)",borderRadius:12,display:"flex",alignItems:"center",gap:8}}>
+      <span style={{fontFamily:"'Cinzel',serif",fontSize:".6rem",color:"#B39DDB",letterSpacing:".12em"}}>👁 NÉZŐ MÓD</span>
+      <button onClick={()=>{setSpectating(false);resetGame();}} style={{background:"none",border:"1px solid rgba(122,74,187,.3)",color:"#B39DDB",padding:"2px 8px",fontFamily:"'Cinzel',serif",fontSize:".5rem",cursor:"pointer",borderRadius:3}}>Kilépés</button>
+    </div>}
+    <PlayingScreen gd={gd} pid={spectating?"__spectator__":pid} user={user} gameId={gameId} onRoll={spectating?()=>{}:rollDice} onEventResult={spectating?()=>{}:handleEvent} eventField={spectating?null:eventField} rolling={rolling} diceVals={diceVals} bursts={bursts} notif={notif} coins={spectating?0:myCoins} onBuyItem={spectating?()=>{}:buyItem} centerDice={centerDice} onLeave={handleLeaveAndBack}/>
+  </>;
 }
