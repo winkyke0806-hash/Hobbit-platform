@@ -1334,6 +1334,45 @@ const ELO_TIERS=[{min:2000,label:"Középföld Bajnoka",icon:"👑",color:"#FFD7
 const getEloRank=(elo)=>ELO_TIERS.find(r=>elo>=r.min)||ELO_TIERS[ELO_TIERS.length-1];
 const DAILY_CHALLENGES=[{icon:"⚔️",task:"Teljesíts 2 feladatot ma",pts:50},{icon:"💍",task:"Szerezz 200 pontot egyetlen feladatban",pts:80},{icon:"🧙",task:"Próbáld ki a Rúna Dekódolót",pts:60},{icon:"🗺️",task:"Teljesítsd a Térkép 3 feladatát",pts:100},{icon:"⏱️",task:"Teljesíts egy feladatot gyorsan",pts:70}];
 
+// ── STORY MODE CHAPTERS ────────────────────────────────────────────────────
+const STORY_CHAPTERS=[
+  {id:1,title:"A Váratlan Vendégség",icon:"🏡",desc:"Bilbo békés reggele Zsákos-dombon. De Gandalf látogatása mindent megváltoztat...",color:"#6B8C3E",tasks:[1,2],reward:{pts:150,title:"Az Út Kezdete"}},
+  {id:2,title:"Trollok a Sötétben",icon:"🔥",desc:"Az első veszély — három éhes troll az út mellett. Bilbo ügyessége lesz a kulcs.",color:"#A0522D",tasks:[3,4],reward:{pts:200,title:"Trollvadász"}},
+  {id:3,title:"Völgyzugoly Menedéke",icon:"🏰",desc:"Elrond házában pihenő vár. De a tudás próbája is itt kezdődik.",color:"#3A7A8B",tasks:[5,6],reward:{pts:200,title:"Elrond Tanítványa"}},
+  {id:4,title:"A Ködös Hegyek Mélyén",icon:"💍",desc:"Gollam barlangjában a sors elvégeztetik — Bilbo megtalálja a Gyűrűt.",color:"#9A8020",tasks:[7,13],reward:{pts:250,title:"Gyűrű Találó"}},
+  {id:5,title:"Bakacsinerdő Árnyai",icon:"🌲",desc:"Az erdő mélyén pókok és tündék várnak. Bilbo itt válik igazi hőssé.",color:"#5A7A2E",tasks:[8,10],reward:{pts:250,title:"Pókölő"}},
+  {id:6,title:"Smaug Haragja",icon:"🐉",desc:"A Magányos Hegy kapujában a sárkánnyal kell szembeszállni. A végső próba!",color:"#B03020",tasks:[9,11],reward:{pts:300,title:"Sárkánnyal Szemben"}},
+  {id:7,title:"Az Öt Sereg Csatája",icon:"⚔️",desc:"A háború elkerülhetetlen. Törpék, tündék, emberek, orkok és sasok ütköznek meg.",color:"#6A3030",tasks:[12,14],reward:{pts:300,title:"Csata Veterán"}},
+  {id:8,title:"Oda-Vissza",icon:"🌟",desc:"Bilbo hazatér Zsákos-dombra — de már nem az a hobbit, aki elindult.",color:"#7A4ABB",tasks:[15],reward:{pts:500,title:"Oda-Vissza Járt Hobbit"}},
+];
+
+// ── SHOP ITEMS ─────────────────────────────────────────────────────────────
+const SHOP_ITEMS=[
+  {id:"frame_emerald",type:"frame",name:"Smaragd Keret",icon:"💚",desc:"Bakacsinerdő zöldje övezi avatárodat",cost:300,frameData:{id:"emerald",name:"Smaragd",border:"2.5px solid",glow:"0 0 14px"}},
+  {id:"frame_shadow",type:"frame",name:"Árnyék Keret",icon:"🖤",desc:"Mordor sötétsége vesz körül",cost:500,frameData:{id:"shadow",name:"Árnyék",border:"3px solid",glow:"0 0 20px"}},
+  {id:"frame_starlight",type:"frame",name:"Csillagfény Keret",icon:"⭐",desc:"Eärendil csillaga ragyog körülötted",cost:800,frameData:{id:"starlight",name:"Csillagfény",border:"2.5px solid",glow:"0 0 22px",pulse:true}},
+  {id:"title_burglar",type:"title",name:"Betörő Cím",icon:"🗝️",desc:"\"Betörő\" — ahogy a szerződés mondja",cost:200,titleData:{id:"burglar",title:"Betörő"}},
+  {id:"title_riddlemaster",type:"title",name:"Rejtvényfejtő Cím",icon:"🧩",desc:"\"Rejtvényfejtő\" — Gollam méltó ellenfele",cost:350,titleData:{id:"riddlemaster",title:"Rejtvényfejtő"}},
+  {id:"title_ringfinder",type:"title",name:"Gyűrűtaláló Cím",icon:"💍",desc:"\"Gyűrűtaláló\" — a sors választottja",cost:500,titleData:{id:"ringfinder",title:"Gyűrűtaláló"}},
+  {id:"title_dragonriddle",type:"title",name:"Sárkány Mesélő Cím",icon:"🐲",desc:"\"Sárkány Mesélő\" — Smaug-gal beszélt és élt",cost:600,titleData:{id:"dragonriddle",title:"Sárkány Mesélő"}},
+  {id:"title_king",type:"title",name:"Középfölde Királya Cím",icon:"👑",desc:"\"Középfölde Királya\" — a legmagasabb cím",cost:1500,titleData:{id:"king",title:"Középfölde Királya"}},
+  {id:"bg_shire",type:"background",name:"Megye Háttér",icon:"🌄",desc:"A Megye zöld dombjai a profilod mögött",cost:400,bgId:"shire"},
+  {id:"bg_mordor",type:"background",name:"Mordor Háttér",icon:"🌋",desc:"Lávás, vörös háttér a bátrabbaknak",cost:600,bgId:"mordor"},
+  {id:"bg_rivendell",type:"background",name:"Völgyzugoly Háttér",icon:"🏞️",desc:"Völgyzugoly nyugodt vízesései",cost:500,bgId:"rivendell"},
+  {id:"effect_sparkle",type:"effect",name:"Csillogás Effekt",icon:"✨",desc:"Avatárod csillogó részecskéket szór",cost:700,effectId:"sparkle"},
+  {id:"effect_fire",type:"effect",name:"Tűz Effekt",icon:"🔥",desc:"Tüzes lángok az avatárod körül",cost:900,effectId:"fire"},
+];
+
+// ── VOTE TASKS (weekly featured) ───────────────────────────────────────────
+const VOTE_OPTIONS=[
+  {id:"v1",icon:"🗡️",name:"Harcos Hét",desc:"Minden feladatért dupla pont!",multiplier:2,taskBonus:"all"},
+  {id:"v2",icon:"💍",name:"Gyűrű Kihívás",desc:"A Gyűrű Rejtélye feladat tripla pontot ér",multiplier:3,taskBonus:13},
+  {id:"v3",icon:"🧙",name:"Varázsló Hét",desc:"Gandalf Döntése dupla pontot ér",multiplier:2,taskBonus:15},
+  {id:"v4",icon:"🐉",name:"Sárkány Szezon",desc:"Smaug feladatok dupla pont!",multiplier:2,taskBonus:9},
+  {id:"v5",icon:"🏰",name:"Tünde Fesztivál",desc:"Bakacsinerdő feladatok dupla pont",multiplier:2,taskBonus:10},
+  {id:"v6",icon:"⛰️",name:"Hegymászó Hét",desc:"Magányos Hegy feladatok tripla pont",multiplier:3,taskBonus:11},
+];
+
 // ── SEASONAL EVENTS ──────────────────────────────────────────────────────────
 const SEASONAL_EVENTS=[
   {id:"yule",name:"Yule-ünnep",icon:"🎄",desc:"Középfölde téli ünnepe — a Shire-i hobbitok legmelegebb időszaka!",color:"#C62828",glow:"rgba(198,40,40,.4)",bg:"linear-gradient(135deg,rgba(198,40,40,.08),rgba(27,94,32,.06))",border:"rgba(198,40,40,.3)",
@@ -1621,7 +1660,13 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
     }catch(e){}
   };
 
-  const claimDaily=()=>{const next=[...dailyDone,dailyChallenge.task];setDailyDone(next);localStorage.setItem("hobbit_daily_"+todayKey,JSON.stringify(next));};
+  const claimDaily=()=>{
+    const next=[...dailyDone,dailyChallenge.task];setDailyDone(next);localStorage.setItem("hobbit_daily_"+todayKey,JSON.stringify(next));
+    const cnt=updateStreak();
+    const mult=cnt>=30?5:cnt>=14?3:cnt>=7?2:cnt>=3?1.5:1;
+    const bonusPts=Math.round(dailyChallenge.pts*mult);
+    onAddScore?.("daily_"+todayKey,bonusPts);
+  };
   const isDailyClaimed=dailyDone.includes(dailyChallenge.task);
   const _blockedNames=["nigro nigro","dildo","zsákos"];
   const leaderboard=(allUsers.length>0
@@ -1844,7 +1889,98 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
   };
 
   const claimSeason=(key,pts)=>{if(seasonDone.includes(key))return;const next=[...seasonDone,key];setSeasonDone(next);localStorage.setItem("hobbit_season_done",JSON.stringify(next));sfx.achievement?.();onAddScore?.("season_"+key,pts);};
-  const TABS2=[{id:"stats",label:"Statok",icon:"📊"},{id:"friends",label:"Barátok",icon:"⚔️"},{id:"clan",label:"Klán",icon:"🛡️"},{id:"leaderboard",label:"Ranglétra",icon:"🏆"},{id:"daily",label:"Napi",icon:"☀️"},...(activeSeason?[{id:"season",label:activeSeason.name,icon:activeSeason.icon}]:[])];
+
+  // ── STREAK SYSTEM ──
+  const [streak,setStreak]=useState(()=>{try{return JSON.parse(localStorage.getItem("hobbit_streak")||'{"count":0,"lastDate":null}');}catch{return{count:0,lastDate:null};}});
+  const updateStreak=()=>{
+    const today=new Date().toISOString().slice(0,10);
+    if(streak.lastDate===today)return streak.count; // already claimed today
+    const yesterday=new Date(Date.now()-86400000).toISOString().slice(0,10);
+    const newCount=streak.lastDate===yesterday?streak.count+1:1;
+    const newStreak={count:newCount,lastDate:today};
+    setStreak(newStreak);
+    localStorage.setItem("hobbit_streak",JSON.stringify(newStreak));
+    return newCount;
+  };
+  const streakMultiplier=streak.count>=30?5:streak.count>=14?3:streak.count>=7?2:streak.count>=3?1.5:1;
+  const streakToday=streak.lastDate===new Date().toISOString().slice(0,10);
+
+  // ── STORY MODE STATE ──
+  const [storyRewards,setStoryRewards]=useState(()=>{try{return JSON.parse(localStorage.getItem("hobbit_story_rewards")||"[]");}catch{return[];}});
+  const claimStoryReward=(chapterId,pts)=>{
+    if(storyRewards.includes(chapterId))return;
+    const next=[...storyRewards,chapterId];
+    setStoryRewards(next);
+    localStorage.setItem("hobbit_story_rewards",JSON.stringify(next));
+    sfx.achievement?.();
+    onAddScore?.("story_ch"+chapterId,pts);
+  };
+
+  // ── SHOP STATE ──
+  const [purchased,setPurchased]=useState(()=>{try{return JSON.parse(localStorage.getItem("hobbit_shop_purchased")||"[]");}catch{return[];}});
+  const [shopMsg,setShopMsg]=useState(null);
+  const buyItem=(item)=>{
+    if(purchased.includes(item.id)){setShopMsg({ok:false,t:"Már megvan!"});setTimeout(()=>setShopMsg(null),1500);return;}
+    if(totalScore<item.cost){setShopMsg({ok:false,t:`Nincs elég pontod! (${totalScore}/${item.cost})`});setTimeout(()=>setShopMsg(null),2000);return;}
+    const next=[...purchased,item.id];
+    setPurchased(next);
+    localStorage.setItem("hobbit_shop_purchased",JSON.stringify(next));
+    sfx.coin?.();
+    setShopMsg({ok:true,t:`"${item.name}" megvásárolva! 🎉`});
+    setTimeout(()=>setShopMsg(null),2000);
+  };
+
+  // ── VOTING STATE ──
+  const weekNum=Math.floor((Date.now()-new Date(2024,0,1).getTime())/(7*24*3600000));
+  const [myVote,setMyVote]=useState(()=>localStorage.getItem("hobbit_vote_"+weekNum)||null);
+  const [votes,setVotes]=useState({});
+  useEffect(()=>{
+    try{
+      const {getDatabase,ref:fbRef,onValue,off}=window.__fbDB||{};
+      if(!getDatabase)return;
+      const db=getDatabase();
+      const vRef=fbRef(db,`votes/week_${weekNum}`);
+      onValue(vRef,(snap)=>{setVotes(snap.val()||{});});
+      return()=>off(vRef);
+    }catch(e){}
+  },[weekNum]);
+  const castVote=(optId)=>{
+    if(myVote)return;
+    setMyVote(optId);
+    localStorage.setItem("hobbit_vote_"+weekNum,optId);
+    try{
+      const {getDatabase,ref:fbRef,set,get:fbGet}=window.__fbDB||{};
+      if(!getDatabase)return;
+      const db=getDatabase();
+      fbGet(fbRef(db,`votes/week_${weekNum}/${optId}`)).then(snap=>{
+        const cur=snap.val()||0;
+        set(fbRef(db,`votes/week_${weekNum}/${optId}`),cur+1);
+      });
+    }catch(e){}
+    sfx.success?.();
+  };
+  const winningVote=(()=>{const entries=Object.entries(votes);if(!entries.length)return null;entries.sort((a,b)=>b[1]-a[1]);return VOTE_OPTIONS.find(v=>v.id===entries[0][0])||null;})();
+  const totalVotes=Object.values(votes).reduce((a,b)=>a+b,0);
+
+  // ── DUEL STATE ──
+  const [duelTarget,setDuelTarget]=useState(null);
+  const [duelMsg,setDuelMsg]=useState(null);
+  const sendDuel=(friendName)=>{
+    try{
+      const {getDatabase,ref:fbRef,set}=window.__fbDB||{};
+      if(!getDatabase)return;
+      const db=getDatabase();
+      const randomTask=TASKS[Math.floor(Math.random()*TASKS.length)];
+      const duelId=`${myName}_${friendName}_${Date.now()}`;
+      set(fbRef(db,`duels/${duelId}`),{id:duelId,challenger:myName,defender:friendName,taskId:randomTask.id,taskTitle:randomTask.title,status:"pending",scores:{},created:Date.now()});
+      set(fbRef(db,`users/${friendName}/duelInvites/${duelId}`),{from:myName,duelId,taskId:randomTask.id,taskTitle:randomTask.title,created:Date.now()});
+      setDuelMsg({ok:true,t:`Párbaj kihívás elküldve: ${friendName}! (${randomTask.title})`});
+      setTimeout(()=>setDuelMsg(null),3000);
+      sfx.dice?.();
+    }catch(e){setDuelMsg({ok:false,t:"Hiba történt!"});}
+  };
+
+  const TABS2=[{id:"stats",label:"Statok",icon:"📊"},{id:"story",label:"Történet",icon:"📜"},{id:"shop",label:"Bolt",icon:"🏪"},{id:"friends",label:"Barátok",icon:"⚔️"},{id:"clan",label:"Klán",icon:"🛡️"},{id:"leaderboard",label:"Ranglétra",icon:"🏆"},{id:"daily",label:"Napi",icon:"☀️"},{id:"vote",label:"Szavazás",icon:"🗳️"},...(activeSeason?[{id:"season",label:activeSeason.name,icon:activeSeason.icon}]:[])];
 
   return <div style={{flex:1,display:"flex",flexDirection:"column",minHeight:0,overflowY:"auto"}}>
     {/* Header */}
@@ -1957,6 +2093,59 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
         <div style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",letterSpacing:".14em",color:"var(--gm)",textTransform:"uppercase",marginBottom:10}}>— Pontok feladatonként —</div>
         <BarChart color={race.color} data={TASKS.map(t=>({label:t.num,val:scores[t.id]||0}))}/>
       </div>
+      {/* Detailed stats */}
+      {(()=>{
+        const taskScores=Object.entries(scores).filter(([k])=>!k.startsWith("season_")&&!k.startsWith("daily_")&&!k.startsWith("story_"));
+        const avgScore=taskScores.length>0?Math.round(taskScores.reduce((a,[,v])=>a+v,0)/taskScores.length):0;
+        const bestTask=taskScores.length>0?taskScores.reduce((a,b)=>b[1]>a[1]?b:a):null;
+        const worstTask=taskScores.length>0?taskScores.reduce((a,b)=>b[1]<a[1]?b:a):null;
+        const bestT=bestTask?TASKS.find(t=>String(t.id)===String(bestTask[0])):null;
+        const worstT=worstTask?TASKS.find(t=>String(t.id)===String(worstTask[0])):null;
+        const typeStats={};
+        taskScores.forEach(([k,v])=>{const t=TASKS.find(t=>String(t.id)===String(k));if(t){typeStats[t.type]=(typeStats[t.type]||{sum:0,count:0});typeStats[t.type].sum+=v;typeStats[t.type].count++;}});
+        const typeNames={quiz:"Kvíz",truefalse:"Igaz/Hamis",fillblank:"Szókitöltő",match:"Párosító",order:"Sorrend",rune:"Rúna",quote:"Idézet",scramble:"Betűkeverő",prophecy:"Jóslat"};
+        return <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          <div style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",letterSpacing:".14em",color:"var(--gm)",textTransform:"uppercase"}}>— Részletes Statisztikák —</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+            <div style={{padding:"10px 8px",background:"rgba(0,0,0,.2)",border:"1px solid rgba(201,168,76,.08)",textAlign:"center"}}>
+              <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".9rem",color:"var(--gold)"}}>{avgScore}</div>
+              <div style={{fontFamily:"'Cinzel',serif",fontSize:".45rem",color:"var(--gm)",letterSpacing:".06em"}}>ÁTLAG PONT</div>
+            </div>
+            <div style={{padding:"10px 8px",background:"rgba(0,0,0,.2)",border:"1px solid rgba(201,168,76,.08)",textAlign:"center"}}>
+              <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".9rem",color:"var(--gold)"}}>{streak.count}</div>
+              <div style={{fontFamily:"'Cinzel',serif",fontSize:".45rem",color:"var(--gm)",letterSpacing:".06em"}}>STREAK 🔥</div>
+            </div>
+            <div style={{padding:"10px 8px",background:"rgba(0,0,0,.2)",border:"1px solid rgba(201,168,76,.08)",textAlign:"center"}}>
+              <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".9rem",color:"var(--gold)"}}>{purchased.length}</div>
+              <div style={{fontFamily:"'Cinzel',serif",fontSize:".45rem",color:"var(--gm)",letterSpacing:".06em"}}>BOLT TÁRGY</div>
+            </div>
+          </div>
+          {bestT&&<div style={{display:"flex",gap:6}}>
+            <div style={{flex:1,padding:"8px 10px",background:"rgba(102,187,106,.04)",border:"1px solid rgba(102,187,106,.15)",display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:"1rem"}}>{bestT.icon}</span>
+              <div><div style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:"#66BB6A",letterSpacing:".06em"}}>LEGJOBB</div><div style={{fontFamily:"'Cinzel',serif",fontSize:".65rem",color:"var(--text)"}}>{bestT.title}: {bestTask[1]}pt</div></div>
+            </div>
+            {worstT&&<div style={{flex:1,padding:"8px 10px",background:"rgba(229,57,53,.04)",border:"1px solid rgba(229,57,53,.12)",display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:"1rem"}}>{worstT.icon}</span>
+              <div><div style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:"#EF9A9A",letterSpacing:".06em"}}>LEGGYENGÉBB</div><div style={{fontFamily:"'Cinzel',serif",fontSize:".65rem",color:"var(--text)"}}>{worstT.title}: {worstTask[1]}pt</div></div>
+            </div>}
+          </div>}
+          {/* Type breakdown */}
+          {Object.keys(typeStats).length>0&&<div style={{padding:"10px 12px",background:"rgba(0,0,0,.15)",border:"1px solid rgba(201,168,76,.08)"}}>
+            <div style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",letterSpacing:".1em",color:"var(--gm)",textTransform:"uppercase",marginBottom:8}}>Kategória bontás</div>
+            <div style={{display:"flex",flexDirection:"column",gap:4}}>
+              {Object.entries(typeStats).sort((a,b)=>(b[1].sum/b[1].count)-(a[1].sum/a[1].count)).map(([type,{sum,count}])=>{
+                const avg=Math.round(sum/count);
+                return <div key={type} style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",color:"var(--text)",minWidth:80}}>{typeNames[type]||type}</span>
+                  <div style={{flex:1,height:4,background:"rgba(255,255,255,.05)",borderRadius:2,overflow:"hidden"}}><div style={{height:"100%",width:`${Math.min(avg/2,100)}%`,background:`linear-gradient(90deg,${race.color},var(--gold))`,borderRadius:2}}/></div>
+                  <span style={{fontFamily:"'Cinzel',serif",fontSize:".48rem",color:"var(--gm)",minWidth:28,textAlign:"right"}}>{avg}pt</span>
+                </div>;
+              })}
+            </div>
+          </div>}
+        </div>;
+      })()}
       <div style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",letterSpacing:".16em",color:"var(--gm)",textTransform:"uppercase"}}>{achivs.filter(a=>a.done).length}/{achivs.length} teljesítve</div>
       <div role="list" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
         {achivs.map(a=><div role="listitem" key={a.name} style={{padding:"8px 10px",background:a.done?"rgba(201,168,76,.06)":"rgba(0,0,0,.15)",border:`1px solid ${a.done?"rgba(102,187,106,.3)":"rgba(255,255,255,.04)"}`,display:"flex",alignItems:"center",gap:8,opacity:a.done?1:.5,boxShadow:a.done?"0 0 8px rgba(102,187,106,.1)":"none"}}>
@@ -1970,6 +2159,9 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
 
     {/* FRIENDS */}
     {tab==="friends"&&<div style={{padding:"14px 12px",display:"flex",flexDirection:"column",gap:12}}>
+
+      {/* Duel message */}
+      {duelMsg&&<div style={{padding:"8px 12px",background:duelMsg.ok?"rgba(102,187,106,.08)":"rgba(229,57,53,.08)",border:`1px solid ${duelMsg.ok?"rgba(102,187,106,.3)":"rgba(229,57,53,.3)"}`,color:duelMsg.ok?"#66BB6A":"#EF9A9A",fontFamily:"'EB Garamond',serif",fontSize:".85rem",textAlign:"center"}}>{duelMsg.t}</div>}
 
       {/* Incoming requests */}
       {pendingIn.length>0&&<div style={{padding:"12px",background:"rgba(122,74,187,.05)",border:"1px solid rgba(122,74,187,.25)"}}>
@@ -2019,6 +2211,7 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
               </div>
               <div style={{fontFamily:"'Cinzel',serif",fontSize:".68rem",color:"var(--gold)"}}>{f.score||0}pt</div>
               <button onClick={()=>setChatWith(f.name)} style={{padding:"4px 8px",background:"rgba(58,122,139,.08)",border:"1px solid rgba(58,122,139,.35)",color:"#4DADE2",fontFamily:"'Cinzel',serif",fontSize:".52rem",cursor:"pointer",whiteSpace:"nowrap"}}>💬 Chat</button>
+              <button onClick={()=>sendDuel(f.name)} style={{padding:"4px 8px",background:"rgba(198,40,40,.08)",border:"1px solid rgba(198,40,40,.3)",color:"#EF9A9A",fontFamily:"'Cinzel',serif",fontSize:".52rem",cursor:"pointer",whiteSpace:"nowrap"}}>⚔️ Párbaj</button>
               <button onClick={()=>onInviteFriend&&onInviteFriend(f.name)} style={{padding:"4px 8px",background:"rgba(122,74,187,.1)",border:"1px solid rgba(122,74,187,.35)",color:"#B39DDB",fontFamily:"'Cinzel',serif",fontSize:".52rem",cursor:"pointer",whiteSpace:"nowrap"}}>🎲 Meghív</button>
               <button onClick={()=>removeFriend(f.name)} style={{background:"none",border:"1px solid rgba(229,57,53,.2)",color:"rgba(229,57,53,.5)",width:22,height:22,cursor:"pointer",fontSize:".65rem",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>×</button>
             </div>;
@@ -2253,13 +2446,25 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
 
     {/* DAILY */}
     {tab==="daily"&&<div style={{padding:"14px 12px",display:"flex",flexDirection:"column",gap:12}}>
+      {/* Streak banner */}
+      <div style={{padding:"14px 16px",background:`linear-gradient(135deg,rgba(255,152,0,.08),rgba(201,168,76,.04))`,border:"1px solid rgba(255,152,0,.25)",display:"flex",alignItems:"center",gap:14}}>
+        <div style={{fontSize:"2rem",filter:"drop-shadow(0 0 8px rgba(255,152,0,.5))"}}>🔥</div>
+        <div style={{flex:1}}>
+          <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.1rem",color:"#FFB74D"}}>{streak.count} napos streak</div>
+          <div style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:"var(--gm)",letterSpacing:".08em",marginTop:2}}>Szorzó: <span style={{color:"#FFB74D"}}>{streakMultiplier}x</span>{streak.count>=3?" 🎉":""}</div>
+        </div>
+        <div style={{display:"flex",gap:3}}>
+          {[3,7,14,30].map(m=><div key={m} style={{width:24,height:24,borderRadius:"50%",background:streak.count>=m?"rgba(255,152,0,.2)":"rgba(255,255,255,.03)",border:`1px solid ${streak.count>=m?"rgba(255,152,0,.5)":"rgba(255,255,255,.06)"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:".45rem",color:streak.count>=m?"#FFB74D":"var(--gm)",fontFamily:"'Cinzel',serif"}}>{m}</div>)}
+        </div>
+      </div>
+      {streakToday&&<div style={{textAlign:"center",fontFamily:"'Cinzel',serif",fontSize:".65rem",color:"#66BB6A",letterSpacing:".06em"}}>✓ Mai streak megtartva!</div>}
       <div style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",letterSpacing:".16em",color:"var(--gm)",textTransform:"uppercase"}}>— Mai Napi Kihívás —</div>
       <div style={{padding:"16px",background:isDailyClaimed?"rgba(102,187,106,.06)":`linear-gradient(135deg,rgba(201,168,76,.05),rgba(201,168,76,.02))`,border:`1px solid ${isDailyClaimed?"rgba(102,187,106,.3)":"rgba(201,168,76,.18)"}`,display:"flex",flexDirection:"column",gap:12}}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
           <span style={{fontSize:"2rem"}}>{dailyChallenge.icon}</span>
           <div style={{flex:1}}>
             <div style={{fontFamily:"'Cinzel',serif",fontSize:".78rem",color:isDailyClaimed?"#66BB6A":"var(--text)"}}>{dailyChallenge.task}</div>
-            <div style={{fontFamily:"'Cinzel',serif",fontSize:".6rem",color:"var(--gm)",marginTop:3}}>Jutalom: <span style={{color:"var(--gold)"}}>+{dailyChallenge.pts} pont</span></div>
+            <div style={{fontFamily:"'Cinzel',serif",fontSize:".6rem",color:"var(--gm)",marginTop:3}}>Jutalom: <span style={{color:"var(--gold)"}}>+{Math.round(dailyChallenge.pts*streakMultiplier)} pont</span>{streakMultiplier>1?<span style={{color:"#FFB74D",fontSize:".52rem"}}> ({streakMultiplier}x streak)</span>:null}</div>
           </div>
           {isDailyClaimed&&<span style={{fontSize:"1.4rem"}}>✅</span>}
         </div>
@@ -2277,6 +2482,138 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
         <div style={{fontFamily:"'Cinzel',serif",fontSize:".6rem",color:"var(--gold)",flexShrink:0}}>+{c.pts}pt</div>
         {i===new Date().getDay()%DAILY_CHALLENGES.length&&<span style={{fontSize:".75rem",color:"var(--gold)"}}>◀</span>}
       </div>)}
+    </div>}
+
+    {/* STORY MODE */}
+    {tab==="story"&&<div style={{padding:"14px 12px",display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{textAlign:"center",padding:"16px",background:"linear-gradient(135deg,rgba(122,74,187,.06),rgba(201,168,76,.04))",border:"1px solid rgba(122,74,187,.2)"}}>
+        <div style={{fontSize:"2rem",marginBottom:6}}>📜</div>
+        <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1rem",color:"var(--gold)",letterSpacing:".1em"}}>Bilbo Útja</div>
+        <div style={{fontFamily:"'EB Garamond',serif",fontSize:".82rem",color:"var(--td)",fontStyle:"italic",marginTop:4}}>Kövesd Bilbo kalandját a Megyétől a Magányos Hegyig!</div>
+        <div style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:"var(--gm)",marginTop:6,letterSpacing:".08em"}}>{storyRewards.length} / {STORY_CHAPTERS.length} fejezet teljesítve</div>
+        <div style={{marginTop:8,height:5,background:"rgba(255,255,255,.05)",borderRadius:3,overflow:"hidden"}}>
+          <div style={{height:"100%",width:`${Math.round(storyRewards.length/STORY_CHAPTERS.length*100)}%`,background:"linear-gradient(90deg,#7A4ABB,#C9A84C)",transition:"width .6s",borderRadius:3}}/>
+        </div>
+      </div>
+      {STORY_CHAPTERS.map((ch,i)=>{
+        const prevDone=i===0||storyRewards.includes(STORY_CHAPTERS[i-1].id);
+        const tasksComplete=ch.tasks.every(t=>completed.includes(t));
+        const rewarded=storyRewards.includes(ch.id);
+        const locked=!prevDone;
+        return <div key={ch.id} style={{padding:"16px",background:rewarded?"rgba(102,187,106,.06)":locked?"rgba(0,0,0,.3)":"rgba(0,0,0,.15)",border:`1px solid ${rewarded?"rgba(102,187,106,.25)":locked?"rgba(255,255,255,.04)":`${ch.color}44`}`,opacity:locked?.4:1,position:"relative",overflow:"hidden",borderRadius:4}}>
+          {locked&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:2,background:"rgba(0,0,0,.5)"}}><span style={{fontSize:"1.5rem"}}>🔒</span></div>}
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{fontSize:"1.8rem",filter:rewarded?"grayscale(.4)":`drop-shadow(0 0 8px ${ch.color}66)`,flexShrink:0}}>{ch.icon}</div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:"var(--gm)",letterSpacing:".12em",textTransform:"uppercase"}}>Fejezet {ch.id}</div>
+              <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".82rem",color:rewarded?"#66BB6A":ch.color}}>{ch.title}</div>
+              <div style={{fontFamily:"'EB Garamond',serif",fontSize:".78rem",color:"var(--td)",fontStyle:"italic",marginTop:3,lineHeight:1.4}}>{ch.desc}</div>
+            </div>
+            {rewarded&&<span style={{fontSize:"1.3rem",flexShrink:0}}>✅</span>}
+          </div>
+          {/* Task progress */}
+          <div style={{marginTop:10,display:"flex",gap:6,flexWrap:"wrap"}}>
+            {ch.tasks.map(tid=>{
+              const t=TASKS.find(t=>t.id===tid);
+              const done=completed.includes(tid);
+              return <div key={tid} style={{padding:"4px 10px",background:done?"rgba(102,187,106,.08)":"rgba(0,0,0,.2)",border:`1px solid ${done?"rgba(102,187,106,.2)":"rgba(201,168,76,.1)"}`,borderRadius:12,display:"flex",alignItems:"center",gap:5}}>
+                <span style={{fontSize:".7rem"}}>{t?.icon}</span>
+                <span style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:done?"#66BB6A":"var(--gm)"}}>{t?.title||`#${tid}`}</span>
+                {done&&<span style={{fontSize:".55rem"}}>✓</span>}
+              </div>;
+            })}
+          </div>
+          {/* Reward */}
+          <div style={{marginTop:8,padding:"8px 12px",background:"rgba(201,168,76,.04)",border:"1px solid rgba(201,168,76,.1)",borderRadius:3,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div>
+              <span style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:"var(--gm)"}}>Jutalom: </span>
+              <span style={{fontFamily:"'Cinzel',serif",fontSize:".62rem",color:"var(--gold)"}}>+{ch.reward.pts} pont</span>
+              <span style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:"#B39DDB",marginLeft:6}}>+ "{ch.reward.title}" cím</span>
+            </div>
+            {tasksComplete&&!rewarded&&!locked&&<button onClick={()=>claimStoryReward(ch.id,ch.reward.pts)} style={{padding:"5px 14px",background:"rgba(102,187,106,.1)",border:"1px solid rgba(102,187,106,.4)",color:"#66BB6A",fontFamily:"'Cinzel',serif",fontSize:".58rem",cursor:"pointer",borderRadius:3}}>Begyűjtés ✓</button>}
+          </div>
+        </div>;
+      })}
+    </div>}
+
+    {/* SHOP */}
+    {tab==="shop"&&<div style={{padding:"14px 12px",display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{textAlign:"center",padding:"16px",background:"linear-gradient(135deg,rgba(201,168,76,.06),rgba(232,201,106,.03))",border:"1px solid rgba(201,168,76,.2)"}}>
+        <div style={{fontSize:"2rem",marginBottom:6}}>🏪</div>
+        <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1rem",color:"var(--gold)",letterSpacing:".1em"}}>Középfölde Piactere</div>
+        <div style={{fontFamily:"'EB Garamond',serif",fontSize:".82rem",color:"var(--td)",fontStyle:"italic",marginTop:4}}>Vásárolj egyedi kereteket, címeket és effekteket a pontjaidból!</div>
+        <div style={{fontFamily:"'Cinzel',serif",fontSize:".68rem",color:"var(--gold)",marginTop:8,padding:"6px 16px",background:"rgba(201,168,76,.08)",border:"1px solid rgba(201,168,76,.2)",display:"inline-block",borderRadius:20}}>💰 Egyenleged: <span style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".85rem"}}>{totalScore}</span> pont</div>
+      </div>
+      {shopMsg&&<div style={{padding:"8px 12px",background:shopMsg.ok?"rgba(102,187,106,.08)":"rgba(229,57,53,.08)",border:`1px solid ${shopMsg.ok?"rgba(102,187,106,.3)":"rgba(229,57,53,.3)"}`,color:shopMsg.ok?"#66BB6A":"#EF9A9A",fontFamily:"'EB Garamond',serif",fontSize:".85rem",textAlign:"center"}}>{shopMsg.t}</div>}
+      {/* Group by type */}
+      {[{type:"frame",label:"Keretek",icon:"🖼️"},{type:"title",label:"Címek",icon:"📛"},{type:"background",label:"Hátterek",icon:"🌄"},{type:"effect",label:"Effektek",icon:"✨"}].map(cat=>{
+        const items=SHOP_ITEMS.filter(i=>i.type===cat.type);
+        return <div key={cat.type}>
+          <div style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",letterSpacing:".14em",color:"var(--gm)",textTransform:"uppercase",marginBottom:8}}>— {cat.icon} {cat.label} —</div>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {items.map(item=>{
+              const owned=purchased.includes(item.id);
+              const canAfford=totalScore>=item.cost;
+              return <div key={item.id} style={{padding:"12px 14px",background:owned?"rgba(102,187,106,.05)":"rgba(0,0,0,.15)",border:`1px solid ${owned?"rgba(102,187,106,.2)":"rgba(201,168,76,.1)"}`,borderRadius:4,display:"flex",alignItems:"center",gap:12}}>
+                <span style={{fontSize:"1.5rem",flexShrink:0}}>{item.icon}</span>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontFamily:"'Cinzel',serif",fontSize:".72rem",color:owned?"#66BB6A":"var(--text)"}}>{item.name}</div>
+                  <div style={{fontFamily:"'EB Garamond',serif",fontSize:".75rem",color:"var(--gm)",fontStyle:"italic"}}>{item.desc}</div>
+                </div>
+                {owned
+                  ?<span style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",color:"#66BB6A",flexShrink:0}}>Megvan ✓</span>
+                  :<button onClick={()=>buyItem(item)} style={{padding:"6px 14px",background:canAfford?"rgba(201,168,76,.1)":"rgba(0,0,0,.2)",border:`1px solid ${canAfford?"rgba(201,168,76,.35)":"rgba(255,255,255,.06)"}`,color:canAfford?"var(--gold)":"var(--gm)",fontFamily:"'Cinzel',serif",fontSize:".58rem",cursor:canAfford?"pointer":"not-allowed",borderRadius:3,flexShrink:0,whiteSpace:"nowrap",opacity:canAfford?1:.5}}>💰 {item.cost}pt</button>
+                }
+              </div>;
+            })}
+          </div>
+        </div>;
+      })}
+    </div>}
+
+    {/* VOTE */}
+    {tab==="vote"&&<div style={{padding:"14px 12px",display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{textAlign:"center",padding:"16px",background:"linear-gradient(135deg,rgba(58,122,139,.06),rgba(201,168,76,.04))",border:"1px solid rgba(58,122,139,.2)"}}>
+        <div style={{fontSize:"2rem",marginBottom:6}}>🗳️</div>
+        <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1rem",color:"var(--gold)",letterSpacing:".1em"}}>Heti Szavazás</div>
+        <div style={{fontFamily:"'EB Garamond',serif",fontSize:".82rem",color:"var(--td)",fontStyle:"italic",marginTop:4}}>Szavazz, melyik legyen a jövő hét kiemelt kihívása!</div>
+        <div style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:"var(--gm)",marginTop:6,letterSpacing:".08em"}}>Hét #{weekNum} · Összesen {totalVotes} szavazat</div>
+      </div>
+      {winningVote&&<div style={{padding:"12px 16px",background:"rgba(201,168,76,.06)",border:"1px solid rgba(201,168,76,.25)",borderRadius:4,display:"flex",alignItems:"center",gap:12}}>
+        <span style={{fontSize:"1.5rem"}}>{winningVote.icon}</span>
+        <div style={{flex:1}}>
+          <div style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:"var(--gm)",letterSpacing:".1em",textTransform:"uppercase"}}>Jelenlegi vezető</div>
+          <div style={{fontFamily:"'Cinzel',serif",fontSize:".78rem",color:"var(--gold)"}}>{winningVote.name}</div>
+          <div style={{fontFamily:"'EB Garamond',serif",fontSize:".72rem",color:"var(--td)",fontStyle:"italic"}}>{winningVote.desc}</div>
+        </div>
+        <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.1rem",color:"var(--gold)"}}>{votes[winningVote.id]||0}</div>
+      </div>}
+      <div style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",letterSpacing:".14em",color:"var(--gm)",textTransform:"uppercase"}}>— Jelöltek —</div>
+      {VOTE_OPTIONS.map(opt=>{
+        const count=votes[opt.id]||0;
+        const pctV=totalVotes>0?Math.round(count/totalVotes*100):0;
+        const isMyVote=myVote===opt.id;
+        return <div key={opt.id} style={{padding:"14px 16px",background:isMyVote?"rgba(58,122,139,.08)":"rgba(0,0,0,.15)",border:`1px solid ${isMyVote?"rgba(58,122,139,.35)":"rgba(201,168,76,.1)"}`,borderRadius:4,display:"flex",flexDirection:"column",gap:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <span style={{fontSize:"1.4rem",flexShrink:0}}>{opt.icon}</span>
+            <div style={{flex:1}}>
+              <div style={{fontFamily:"'Cinzel',serif",fontSize:".75rem",color:isMyVote?"#4DB6AC":"var(--text)"}}>{opt.name}</div>
+              <div style={{fontFamily:"'EB Garamond',serif",fontSize:".72rem",color:"var(--gm)",fontStyle:"italic"}}>{opt.desc}</div>
+            </div>
+            {!myVote
+              ?<button onClick={()=>castVote(opt.id)} style={{padding:"6px 14px",background:"rgba(58,122,139,.1)",border:"1px solid rgba(58,122,139,.35)",color:"#4DB6AC",fontFamily:"'Cinzel',serif",fontSize:".58rem",cursor:"pointer",borderRadius:3,flexShrink:0}}>Szavazok</button>
+              :<div style={{textAlign:"center",flexShrink:0}}>
+                <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".9rem",color:isMyVote?"#4DB6AC":"var(--gm)"}}>{count}</div>
+                <div style={{fontFamily:"'Cinzel',serif",fontSize:".42rem",color:"var(--gm)"}}>{pctV}%</div>
+              </div>
+            }
+          </div>
+          {myVote&&<div style={{height:4,background:"rgba(255,255,255,.05)",borderRadius:2,overflow:"hidden"}}>
+            <div style={{height:"100%",width:`${pctV}%`,background:isMyVote?"#4DB6AC":"var(--gm)",transition:"width .6s",borderRadius:2}}/>
+          </div>}
+        </div>;
+      })}
+      {myVote&&<div style={{textAlign:"center",fontFamily:"'Cinzel',serif",fontSize:".65rem",color:"#4DB6AC"}}>✓ Szavaztál ezen a héten!</div>}
     </div>}
 
     {/* SEASONAL EVENT */}
