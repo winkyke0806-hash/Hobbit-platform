@@ -1126,7 +1126,7 @@ function TreasureGame(){
     setCells(next);
     if(next[r][c].type==="gold"){sfx.coin();setFound(f=>{const nf=f+1;if(nf>=TREASURES){setDone(true);sfx.achievement();}return nf;});}
     else if(next[r][c].type==="trap"){sfx.error();setTrapped(t=>{const nt=t+1;if(nt>=3){setDone(true);}return nt;});}
-    else sfx.click();
+    else {/* click via globalClick */}
   };
   const reset=()=>{
     const b=Array.from({length:SIZE},()=>Array.from({length:SIZE},()=>({type:"empty",revealed:false})));
@@ -1187,7 +1187,6 @@ function TavernChat(){
   const send=()=>{
     const text=input.trim();
     if(!text||!myName)return;
-    sfx.click();
     try{
       const {getDatabase,ref:fbRef,push,set}=window.__fbDB||{};
       if(!getDatabase)return;
@@ -1611,7 +1610,6 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
   const sendMessage=()=>{
     const text=msgInput.trim();
     if(!text||!chatWith||!myName) return;
-    sfx.click();
     try{
       const {getDatabase,ref:fbRef,push,set}=window.__fbDB||{};
       if(!getDatabase) return;
@@ -1634,6 +1632,9 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
   const [myClan,setMyClan]=useState(null);
   const [clanInput,setClanInput]=useState("");
   const [clanMsg,setClanMsg]=useState(null);
+  const [clanWar,setClanWar]=useState(null);
+  const [clanEvents,setClanEvents]=useState([]);
+  const [warTarget,setWarTarget]=useState("");
 
   // Load clan data
   useEffect(()=>{
@@ -1700,6 +1701,145 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
       remove(fbRef(db,`clans/${myClan.id}/members/${myName}`));
       remove(fbRef(db,`users/${myName}/clan`));
       setMyClan(null);
+    }catch(e){}
+  };
+
+  // ── CLAN WAR MISSIONS & EVENTS ──
+  const WAR_MISSIONS=[
+    {id:"w1",icon:"🗡️",name:"Harci Keresztség",desc:"Teljesíts 1 feladatot a háború alatt",pts:30,type:"tasks",goal:1},
+    {id:"w2",icon:"⚔️",name:"Csatakiáltás",desc:"Teljesíts 3 feladatot",pts:80,type:"tasks",goal:3},
+    {id:"w3",icon:"🛡️",name:"Pajzsfal",desc:"Érj el 200+ pontot egy feladatban",pts:60,type:"single_score",goal:200},
+    {id:"w4",icon:"🏹",name:"Íjász Szárny",desc:"Játssz az Íjász mini-játékban",pts:40,type:"minigame",goal:"archery"},
+    {id:"w5",icon:"💎",name:"Kincsvadász",desc:"Találj 5+ aranyat a Kincskeresőben",pts:50,type:"minigame",goal:"treasure"},
+    {id:"w6",icon:"🃏",name:"Memória Mester",desc:"Játssz a Memória mini-játékban",pts:40,type:"minigame",goal:"memory"},
+    {id:"w7",icon:"🔥",name:"Tűzvihar",desc:"Gyűjts 500 pontot összesen",pts:100,type:"total_score",goal:500},
+    {id:"w8",icon:"💀",name:"Halálosztó",desc:"Teljesíts 5 feladatot",pts:120,type:"tasks",goal:5},
+    {id:"w9",icon:"🧙",name:"Gandalf Parancsa",desc:"Válaszolj 4+ riddle-re helyesen",pts:70,type:"minigame",goal:"riddle"},
+    {id:"w10",icon:"⚡",name:"Villámcsapás",desc:"Teljesíts egy feladatot 60 mp alatt",pts:90,type:"speed",goal:60},
+    {id:"w11",icon:"🏔️",name:"Erebor Ostroma",desc:"Teljesítsd a Magányos Hegy feladatot",pts:80,type:"specific_task",goal:10},
+    {id:"w12",icon:"🌋",name:"Mordor Kapuja",desc:"Teljesítsd a Mordor feladatot",pts:80,type:"specific_task",goal:15},
+    {id:"w13",icon:"🐉",name:"Smaug Bosszúja",desc:"Érj el 300+ pontot egy feladatban",pts:110,type:"single_score",goal:300},
+    {id:"w14",icon:"👑",name:"Király Visszatér",desc:"Teljesíts 7 feladatot",pts:150,type:"tasks",goal:7},
+    {id:"w15",icon:"🌟",name:"Csillagfény",desc:"Gyűjts 1000 pontot összesen",pts:180,type:"total_score",goal:1000},
+    {id:"w16",icon:"🗺️",name:"Felderítő",desc:"Teljesíts feladatot 3 különböző helyszínen",pts:90,type:"locations",goal:3},
+    {id:"w17",icon:"🍺",name:"Fogadós Kihívás",desc:"Játssz 3 különböző mini-játékban",pts:70,type:"diff_minigames",goal:3},
+    {id:"w18",icon:"💍",name:"A Gyűrű Hatalma",desc:"Érj el 90%+ pontot bármely feladatban",pts:100,type:"perfect",goal:90},
+    {id:"w19",icon:"⛏️",name:"Durin Öröksége",desc:"Teljesíts 10 feladatot",pts:200,type:"tasks",goal:10},
+    {id:"w20",icon:"🏆",name:"Középfölde Hőse",desc:"Gyűjts 2000 pontot és teljesíts 10 feladatot",pts:300,type:"ultimate",goal:{score:2000,tasks:10}},
+  ];
+
+  const CLAN_EVENTS=[
+    {id:"quest_rush",icon:"🗡️",name:"Feladat Roham",desc:"A klán tagjai összesen 10 feladatot teljesítenek",goal:10,unit:"feladat",duration:72},
+    {id:"score_hunt",icon:"💰",name:"Pontgyűjtő Hadjárat",desc:"A klán összesen 2000 pontot gyűjt",goal:2000,unit:"pont",duration:48},
+    {id:"mini_master",icon:"🎮",name:"Mini-Játék Mesterek",desc:"A tagok összesen 15 mini-játékot játszanak",goal:15,unit:"játék",duration:48},
+    {id:"perfect_run",icon:"⭐",name:"Tökéletes Futam",desc:"5 feladatot 90%+ ponttal teljesítenek",goal:5,unit:"feladat",duration:72},
+  ];
+
+  // Load clan war + events
+  useEffect(()=>{
+    if(!myClan?.id)return;
+    try{
+      const {getDatabase,ref:fbRef,onValue,off}=window.__fbDB||{};
+      if(!getDatabase)return;
+      const db=getDatabase();
+      const warRef=fbRef(db,`clans/${myClan.id}/war`);
+      const evRef=fbRef(db,`clans/${myClan.id}/events`);
+      onValue(warRef,(s)=>setClanWar(s.val()||null));
+      onValue(evRef,(s)=>{const d=s.val();setClanEvents(d?Object.entries(d).map(([k,v])=>({...v,fbKey:k})):[]); });
+      return()=>{off(warRef);off(evRef);};
+    }catch(e){}
+  },[myClan?.id]);
+
+  // Pick 5 random missions for a war (seeded by war start time)
+  const _pickWarMissions=(seed)=>{
+    const rng=(s)=>{s=Math.imul(s^(s>>>16),0x45d9f3b);s=Math.imul(s^(s>>>13),0x45d9f3b);return((s^(s>>>16))>>>0)/4294967296;};
+    const pool=[...WAR_MISSIONS];const picked=[];
+    for(let i=0;i<5&&pool.length;i++){const idx=Math.floor(rng(seed+i*7919)*pool.length);picked.push(pool.splice(idx,1)[0]);}
+    return picked;
+  };
+
+  const startClanWar=(targetClanId)=>{
+    if(!myClan||!targetClanId)return;
+    try{
+      const {getDatabase,ref:fbRef,get:fbGet,set}=window.__fbDB||{};
+      if(!getDatabase)return;
+      const db=getDatabase();
+      fbGet(fbRef(db,`clans/${targetClanId}`)).then(snap=>{
+        if(!snap.exists()){setClanMsg({ok:false,t:"Nincs ilyen klán!"});return;}
+        const enemy=snap.val();
+        const now=Date.now();
+        const missions=_pickWarMissions(now).map(m=>m.id);
+        const warData={
+          started:now,expires:now+48*3600000,missions,
+          challenger:{id:myClan.id,name:myClan.name,score:0,completed:{},members:{}},
+          defender:{id:targetClanId,name:enemy.name,score:0,completed:{},members:{}},
+          status:"active"
+        };
+        set(fbRef(db,`clans/${myClan.id}/war`),warData);
+        set(fbRef(db,`clans/${targetClanId}/war`),warData);
+        setClanWar(warData);setWarTarget("");
+        sfx.dice?.();
+        setClanMsg({ok:true,t:`Háború indítva "${enemy.name}" ellen!`});
+        setTimeout(()=>setClanMsg(null),2500);
+      });
+    }catch(e){setClanMsg({ok:false,t:"Hiba történt!"});}
+  };
+
+  const completeWarMission=(missionId)=>{
+    if(!clanWar||clanWar.status!=="active"||!myClan)return;
+    const mission=WAR_MISSIONS.find(m=>m.id===missionId);if(!mission)return;
+    const side=clanWar.challenger.id===myClan.id?"challenger":"defender";
+    // Check if already completed by this user
+    if(clanWar[side]?.completed?.[myName+"_"+missionId])return;
+    try{
+      const {getDatabase,ref:fbRef,get:fbGet,update}=window.__fbDB||{};
+      if(!getDatabase)return;
+      const db=getDatabase();
+      const basePath=`clans/${myClan.id}/war`;
+      fbGet(fbRef(db,basePath)).then(snap=>{
+        const war=snap.val();if(!war)return;
+        const cur=war[side]||{score:0,completed:{},members:{}};
+        const newScore=(cur.score||0)+mission.pts;
+        const newCompleted={...(cur.completed||{}),[myName+"_"+missionId]:true};
+        const memberScore=(cur.members?.[myName]||0)+mission.pts;
+        update(fbRef(db,`${basePath}/${side}`),{score:newScore,completed:newCompleted,members:{...(cur.members||{}),[myName]:memberScore}});
+        const enemyId=side==="challenger"?war.defender.id:war.challenger.id;
+        update(fbRef(db,`clans/${enemyId}/war/${side}`),{score:newScore,completed:newCompleted,members:{...(cur.members||{}),[myName]:memberScore}});
+      });
+      sfx.achievement?.();
+      setClanMsg({ok:true,t:`"${mission.name}" teljesítve! +${mission.pts} háborús pont`});
+      setTimeout(()=>setClanMsg(null),2500);
+    }catch(e){}
+  };
+
+  const startClanEvent=(evId)=>{
+    if(!myClan)return;
+    const ev=CLAN_EVENTS.find(e=>e.id===evId);if(!ev)return;
+    try{
+      const {getDatabase,ref:fbRef,push,set}=window.__fbDB||{};
+      if(!getDatabase)return;
+      const db=getDatabase();
+      const evRef=push(fbRef(db,`clans/${myClan.id}/events`));
+      set(evRef,{id:ev.id,name:ev.name,icon:ev.icon,desc:ev.desc,goal:ev.goal,unit:ev.unit,started:Date.now(),expires:Date.now()+ev.duration*3600000,progress:0,contributors:{}});
+      setClanMsg({ok:true,t:`"${ev.name}" esemény elindítva!`});setTimeout(()=>setClanMsg(null),2500);
+    }catch(e){setClanMsg({ok:false,t:"Hiba történt!"});}
+  };
+
+  const contributeToEvent=(fbKey,amount)=>{
+    if(!myClan)return;
+    try{
+      const {getDatabase,ref:fbRef,get:fbGet,update}=window.__fbDB||{};
+      if(!getDatabase)return;
+      const db=getDatabase();
+      const ePath=`clans/${myClan.id}/events/${fbKey}`;
+      fbGet(fbRef(db,ePath)).then(snap=>{
+        const ev=snap.val();if(!ev)return;
+        const newProg=Math.min(ev.goal,(ev.progress||0)+amount);
+        const contribs={...(ev.contributors||{}),[myName]:(ev.contributors?.[myName]||0)+amount};
+        update(fbRef(db,ePath),{progress:newProg,contributors:contribs});
+      });
+      sfx.success?.();
+      setClanMsg({ok:true,t:`+${amount} hozzájárulás!`});setTimeout(()=>setClanMsg(null),1500);
     }catch(e){}
   };
 
@@ -1986,6 +2126,128 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
           {/* Leave button */}
           <button onClick={leaveClan} style={{padding:"10px",background:"rgba(229,57,53,.06)",border:"1px solid rgba(229,57,53,.2)",color:"#EF9A9A",fontFamily:"'Cinzel',serif",fontSize:".65rem",letterSpacing:".1em",cursor:"pointer",borderRadius:4,marginTop:4}}>Kilépés a klánból ✕</button>
         </div>
+
+        {/* ═══ CLAN WAR ═══ */}
+        <div style={{position:"relative",padding:"18px 16px",background:"linear-gradient(180deg,rgba(139,0,0,.12),rgba(0,0,0,.3))",border:"1px solid rgba(198,40,40,.3)",overflow:"hidden"}}>
+          <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:"linear-gradient(90deg,transparent,#C62828,#FF6F00,#C62828,transparent)"}}/>
+          <div style={{position:"absolute",bottom:0,left:0,right:0,height:2,background:"linear-gradient(90deg,transparent,#C62828,#FF6F00,#C62828,transparent)"}}/>
+          <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1rem",color:"#EF9A9A",textAlign:"center",letterSpacing:".18em",textShadow:"0 0 20px rgba(198,40,40,.6)",animation:"warTitle 3s ease-in-out infinite"}}>KLÁN HÁBORÚ</div>
+          <div style={{fontFamily:"'EB Garamond',serif",fontSize:".78rem",color:"var(--td)",textAlign:"center",fontStyle:"italic",marginTop:4}}>Teljesítsd a háborús küldetéseket a klánod dicsőségéért!</div>
+        </div>
+        {!clanWar?<div style={{padding:"16px",background:"rgba(0,0,0,.2)",border:"1px solid rgba(198,40,40,.15)",display:"flex",flexDirection:"column",gap:14}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            {WAR_MISSIONS.slice(0,4).map(m=><div key={m.id} style={{padding:"10px",background:"rgba(198,40,40,.04)",border:"1px solid rgba(198,40,40,.12)",textAlign:"center",borderRadius:4}}>
+              <div style={{fontSize:"1.3rem"}}>{m.icon}</div>
+              <div style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",color:"var(--gm)",marginTop:3}}>{m.name}</div>
+            </div>)}
+          </div>
+          <div style={{fontFamily:"'EB Garamond',serif",fontSize:".82rem",color:"var(--td)",textAlign:"center",fontStyle:"italic"}}>20 egyedi küldetés — 5 véletlenszerű minden háborúban</div>
+          {myClan.leader===myName?<>
+            <input value={warTarget} onChange={e=>setWarTarget(e.target.value)} placeholder="Ellenfél klán kódja..." style={{background:"rgba(0,0,0,.5)",border:"1px solid rgba(198,40,40,.25)",color:"var(--text)",fontFamily:"'EB Garamond',serif",fontSize:".9rem",padding:"10px 14px",outline:"none",borderRadius:4}}/>
+            <button onClick={()=>startClanWar(warTarget)} style={{padding:"12px",background:"linear-gradient(135deg,rgba(198,40,40,.15),rgba(139,0,0,.1))",border:"1px solid rgba(198,40,40,.5)",color:"#EF9A9A",fontFamily:"'Cinzel Decorative',serif",fontSize:".8rem",letterSpacing:".14em",cursor:"pointer",borderRadius:4,textShadow:"0 0 12px rgba(198,40,40,.4)"}}>Háború Indítása ⚔️</button>
+          </>:<div style={{fontFamily:"'Cinzel',serif",fontSize:".68rem",color:"var(--gm)",textAlign:"center",fontStyle:"italic"}}>Csak a klánvezér indíthat háborút.</div>}
+        </div>
+        :<div style={{display:"flex",flexDirection:"column",gap:0}}>
+          {/* ── BATTLEFIELD HEADER ── */}
+          <div style={{padding:"16px",background:"linear-gradient(135deg,rgba(139,0,0,.12),rgba(0,0,0,.3))",border:"1px solid rgba(198,40,40,.25)",borderBottom:"none",display:"flex",flexDirection:"column",gap:12}}>
+            {/* VS Scoreboard */}
+            <div style={{display:"flex",alignItems:"stretch",gap:0}}>
+              {[["challenger","#C9A84C"],["defender","#EF9A9A"]].map(([side,clr],si)=>{
+                const s=clanWar[side];const isMine=s.id===myClan.id;
+                const myScore=s.score||0;
+                return <div key={side} style={{flex:1,padding:"12px 10px",background:isMine?"rgba(201,168,76,.06)":"rgba(198,40,40,.04)",border:`1px solid ${isMine?"rgba(201,168,76,.25)":"rgba(198,40,40,.15)"}`,borderRadius:si===0?"4px 0 0 4px":"0 4px 4px 0",textAlign:"center",position:"relative",overflow:"hidden"}}>
+                  {isMine&&<div style={{position:"absolute",top:0,left:0,right:0,height:2,background:"var(--gold)"}}/>}
+                  <div style={{fontFamily:"'Cinzel',serif",fontSize:".62rem",color:isMine?"var(--gold)":"#EF9A9A",letterSpacing:".06em",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name}</div>
+                  <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.6rem",color:isMine?"var(--gold)":"#EF9A9A",marginTop:4,textShadow:`0 0 16px ${isMine?"rgba(201,168,76,.5)":"rgba(198,40,40,.5)"}`,animation:isMine?"":"none"}}>{myScore}</div>
+                  <div style={{fontFamily:"'Cinzel',serif",fontSize:".42rem",color:"var(--gm)",letterSpacing:".08em",marginTop:2}}>HÁBORÚS PONT</div>
+                  {/* Member contributions */}
+                  {s.members&&<div style={{marginTop:6,display:"flex",flexDirection:"column",gap:2}}>
+                    {Object.entries(s.members).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([name,pts])=><div key={name} style={{fontFamily:"'Cinzel',serif",fontSize:".42rem",color:name===myName?"var(--gold)":"var(--gm)",opacity:.8}}>{name}: {pts}pt</div>)}
+                  </div>}
+                </div>;
+              })}
+            </div>
+            {/* Score bar */}
+            {(()=>{const cs=clanWar.challenger.score||0;const ds=clanWar.defender.score||0;const total=cs+ds||1;const cPct=Math.round(cs/total*100);return <div style={{position:"relative"}}>
+              <div style={{height:10,background:"rgba(0,0,0,.4)",borderRadius:5,overflow:"hidden",display:"flex",border:"1px solid rgba(198,40,40,.15)"}}>
+                <div style={{width:`${cPct}%`,background:clanWar.challenger.id===myClan.id?"linear-gradient(90deg,#8B6914,#C9A84C)":"linear-gradient(90deg,#8B0000,#EF9A9A)",transition:"width .8s cubic-bezier(.22,1,.36,1)",boxShadow:clanWar.challenger.id===myClan.id?"0 0 8px rgba(201,168,76,.5)":"0 0 8px rgba(198,40,40,.5)"}}/>
+                <div style={{flex:1,background:clanWar.defender.id===myClan.id?"linear-gradient(90deg,#C9A84C,#8B6914)":"linear-gradient(90deg,#EF9A9A,#8B0000)",transition:"width .8s cubic-bezier(.22,1,.36,1)",boxShadow:clanWar.defender.id===myClan.id?"0 0 8px rgba(201,168,76,.5)":"0 0 8px rgba(198,40,40,.5)"}}/>
+              </div>
+              <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",fontFamily:"'Cinzel Decorative',serif",fontSize:".55rem",color:"#fff",textShadow:"0 0 6px rgba(0,0,0,.9)",letterSpacing:".1em"}}>VS</div>
+            </div>;})()}
+            {/* Timer */}
+            {(()=>{const left=Math.max(0,clanWar.expires-Date.now());const h=Math.floor(left/3600000);const m=Math.floor((left%3600000)/60000);const urgent=left<6*3600000;return <div style={{textAlign:"center",padding:"6px",background:urgent?"rgba(198,40,40,.08)":"rgba(0,0,0,.2)",border:`1px solid ${urgent?"rgba(198,40,40,.3)":"rgba(201,168,76,.1)"}`,borderRadius:4}}>
+              <div style={{fontFamily:"'Cinzel',serif",fontSize:".45rem",color:"var(--gm)",letterSpacing:".1em",textTransform:"uppercase"}}>Háború vége</div>
+              <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".9rem",color:urgent?"#EF9A9A":"var(--gold)",letterSpacing:".12em",animation:urgent?"warUrgent 1s ease-in-out infinite":"none"}}>{left>0?`${h}ó ${m}p`:"LEJÁRT"}</div>
+            </div>;})()}
+          </div>
+          {/* ── WAR MISSIONS ── */}
+          <div style={{padding:"14px 16px",background:"rgba(0,0,0,.2)",border:"1px solid rgba(198,40,40,.15)",borderTop:"none",display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",letterSpacing:".14em",color:"#EF9A9A",textTransform:"uppercase",textAlign:"center"}}>— Háborús Küldetések —</div>
+            {(clanWar.missions||[]).map(mid=>{
+              const m=WAR_MISSIONS.find(w=>w.id===mid);if(!m)return null;
+              const side=clanWar.challenger.id===myClan.id?"challenger":"defender";
+              const done=!!clanWar[side]?.completed?.[myName+"_"+mid];
+              return <div key={mid} style={{padding:"12px 14px",background:done?"rgba(102,187,106,.06)":"rgba(198,40,40,.03)",border:`1px solid ${done?"rgba(102,187,106,.25)":"rgba(198,40,40,.12)"}`,borderRadius:4,display:"flex",alignItems:"center",gap:12,transition:"all .3s",position:"relative",overflow:"hidden"}}>
+                {done&&<div style={{position:"absolute",top:0,left:0,bottom:0,width:3,background:"#66BB6A"}}/>}
+                <span style={{fontSize:"1.4rem",filter:done?"none":"drop-shadow(0 0 6px rgba(198,40,40,.4))",flexShrink:0}}>{m.icon}</span>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontFamily:"'Cinzel',serif",fontSize:".75rem",color:done?"#66BB6A":"var(--text)"}}>{m.name}</div>
+                  <div style={{fontFamily:"'EB Garamond',serif",fontSize:".75rem",color:"var(--gm)",fontStyle:"italic"}}>{m.desc}</div>
+                  <div style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:done?"#66BB6A":"#EF9A9A",marginTop:3}}>+{m.pts} háborús pont</div>
+                </div>
+                {done?<span style={{fontSize:"1.2rem",flexShrink:0}}>✅</span>
+                  :<button onClick={()=>completeWarMission(mid)} style={{padding:"6px 12px",background:"rgba(198,40,40,.1)",border:"1px solid rgba(198,40,40,.35)",color:"#EF9A9A",fontFamily:"'Cinzel',serif",fontSize:".58rem",cursor:"pointer",borderRadius:3,flexShrink:0,whiteSpace:"nowrap"}}>Kész ⚔️</button>}
+              </div>;
+            })}
+          </div>
+        </div>}
+
+        {/* ═══ CLAN EVENTS ═══ */}
+        <div style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",letterSpacing:".14em",color:"var(--gm)",textTransform:"uppercase",textAlign:"center",marginTop:4}}>— Klán Események —</div>
+        {/* Active events */}
+        {clanEvents.filter(e=>e.expires>Date.now()).map(ev=>{
+          const pct=Math.min(100,Math.round((ev.progress||0)/ev.goal*100));
+          const done=ev.progress>=ev.goal;
+          const left=Math.max(0,ev.expires-Date.now());const h=Math.floor(left/3600000);
+          return <div key={ev.fbKey} style={{padding:"14px 16px",background:done?"rgba(102,187,106,.06)":"rgba(0,0,0,.15)",border:`1px solid ${done?"rgba(102,187,106,.25)":"rgba(201,168,76,.15)"}`,display:"flex",flexDirection:"column",gap:10,borderRadius:4}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <span style={{fontSize:"1.5rem"}}>{ev.icon}</span>
+              <div style={{flex:1}}>
+                <div style={{fontFamily:"'Cinzel',serif",fontSize:".78rem",color:done?"#66BB6A":"var(--gold)"}}>{ev.name}</div>
+                <div style={{fontFamily:"'EB Garamond',serif",fontSize:".78rem",color:"var(--td)",fontStyle:"italic"}}>{ev.desc}</div>
+              </div>
+              {done&&<span style={{fontSize:"1.2rem"}}>✅</span>}
+            </div>
+            {/* Progress bar */}
+            <div style={{height:6,background:"rgba(255,255,255,.05)",borderRadius:3,overflow:"hidden"}}>
+              <div style={{height:"100%",width:`${pct}%`,background:done?"#66BB6A":"linear-gradient(90deg,var(--gold),#E8C96A)",transition:"width .5s",borderRadius:3}}/>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",color:done?"#66BB6A":"var(--gm)"}}>{ev.progress||0}/{ev.goal} {ev.unit}</span>
+              <span style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:left<3600000?"#EF9A9A":"var(--gm)"}}>{left>0?`${h}ó hátra`:"Lejárt"}</span>
+            </div>
+            {/* Contributors */}
+            {ev.contributors&&<div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+              {Object.entries(ev.contributors).map(([name,val])=><span key={name} style={{padding:"2px 8px",background:"rgba(201,168,76,.06)",border:"1px solid rgba(201,168,76,.12)",borderRadius:10,fontFamily:"'Cinzel',serif",fontSize:".48rem",color:name===myName?"var(--gold)":"var(--gm)"}}>{name}: +{val}</span>)}
+            </div>}
+            {!done&&<button onClick={()=>contributeToEvent(ev.fbKey,1)} style={{padding:"8px",background:"rgba(201,168,76,.08)",border:"1px solid rgba(201,168,76,.3)",color:"var(--gold)",fontFamily:"'Cinzel',serif",fontSize:".65rem",cursor:"pointer",borderRadius:3}}>Hozzájárulás +1 ✓</button>}
+          </div>;
+        })}
+        {/* Start new event (leader only) */}
+        {myClan.leader===myName&&<div style={{padding:"14px 16px",background:"rgba(0,0,0,.15)",border:"1px dashed rgba(201,168,76,.15)",display:"flex",flexDirection:"column",gap:10,borderRadius:4}}>
+          <div style={{fontFamily:"'Cinzel',serif",fontSize:".68rem",color:"var(--gold)",textAlign:"center"}}>Új Esemény Indítása</div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {CLAN_EVENTS.map(ev=><button key={ev.id} onClick={()=>startClanEvent(ev.id)} style={{padding:"10px 14px",background:"rgba(201,168,76,.04)",border:"1px solid rgba(201,168,76,.12)",display:"flex",alignItems:"center",gap:10,cursor:"pointer",borderRadius:4,transition:"all .2s"}} onMouseEnter={e=>e.currentTarget.style.borderColor="rgba(201,168,76,.4)"} onMouseLeave={e=>e.currentTarget.style.borderColor="rgba(201,168,76,.12)"}>
+              <span style={{fontSize:"1.2rem"}}>{ev.icon}</span>
+              <div style={{flex:1,textAlign:"left"}}>
+                <div style={{fontFamily:"'Cinzel',serif",fontSize:".7rem",color:"var(--gold)"}}>{ev.name}</div>
+                <div style={{fontFamily:"'EB Garamond',serif",fontSize:".72rem",color:"var(--gm)",fontStyle:"italic"}}>{ev.desc} ({ev.duration}ó)</div>
+              </div>
+            </button>)}
+          </div>
+        </div>}
+        {myClan.leader!==myName&&clanEvents.filter(e=>e.expires>Date.now()).length===0&&<div style={{fontFamily:"'EB Garamond',serif",fontSize:".82rem",color:"var(--gm)",textAlign:"center",fontStyle:"italic",padding:12}}>Nincs aktív esemény. A klánvezér indíthat újat.</div>}
       </>}
     </div>}
 
@@ -2188,15 +2450,17 @@ export default function HobbitApp(){
     else playMusic("theme");
   },[tab,muted]);
 
-  const switchTab=(id)=>{sfx.click();setTab(id);};
+  const switchTab=(id)=>{setTab(id);};
 
   const TABS=[{id:"map",icon:"🗺️",label:"Térkép"},{id:"games",icon:"🎮",label:"Minijátékok"},{id:"profile",icon:"👤",label:"Profil"},{id:"board",icon:"🎲",label:"Társasjáték"}];
 
   if(!user) return null;
 
+  const globalClick=useCallback((e)=>{if(e.target.closest("button")||e.target.closest("[role='tab']")||e.target.closest(".quiz-opt")||e.target.closest(".tf-btn")||e.target.closest(".fill-opt")||e.target.closest(".match-char")||e.target.closest(".match-desc")||e.target.closest(".rune-key")||e.target.closest(".quote-char")||e.target.closest(".prophecy-opt"))sfx.click(.3);},[]);
+
   return <>
     <style>{CSS}</style>
-    <div className="root">
+    <div className="root" onClick={globalClick}>
       <FloatingStones count={12}/>
       <div className="noise"/>
       <div style={{position:"relative",zIndex:10,height:"100vh",display:"flex",flexDirection:"column"}}>
@@ -2250,7 +2514,7 @@ export default function HobbitApp(){
             <div style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",color:"var(--gm)",marginTop:6,letterSpacing:".1em"}}>SZOBA: {gameInvitePopup.gameId}</div>
           </div>
           <div style={{display:"flex",gap:10}}>
-            <button onClick={()=>{sfx.click();declineGameInvite(gameInvitePopup);}} style={{flex:1,padding:"12px",background:"transparent",border:"1px solid rgba(229,57,53,.25)",color:"rgba(229,57,53,.7)",fontFamily:"'Cinzel',serif",fontSize:".75rem",cursor:"pointer",borderRadius:3,letterSpacing:".06em"}}>✗ Elutasít</button>
+            <button onClick={()=>declineGameInvite(gameInvitePopup)} style={{flex:1,padding:"12px",background:"transparent",border:"1px solid rgba(229,57,53,.25)",color:"rgba(229,57,53,.7)",fontFamily:"'Cinzel',serif",fontSize:".75rem",cursor:"pointer",borderRadius:3,letterSpacing:".06em"}}>✗ Elutasít</button>
             <button onClick={()=>{sfx.success();acceptGameInvite(gameInvitePopup);}} style={{flex:1,padding:"12px",background:"linear-gradient(135deg,rgba(102,187,106,.12),rgba(102,187,106,.05))",border:"1px solid rgba(102,187,106,.5)",color:"#66BB6A",fontFamily:"'Cinzel',serif",fontSize:".75rem",cursor:"pointer",borderRadius:3,letterSpacing:".06em",boxShadow:"0 0 18px rgba(102,187,106,.12)"}}>✓ Csatlakozás</button>
           </div>
         </div>
@@ -2294,6 +2558,8 @@ body{background:var(--bg);}
 @keyframes achieveTimer{from{width:100%}to{width:0%}}
 @keyframes seasonIcon{0%,100%{transform:scale(1) rotate(0deg);filter:drop-shadow(0 0 8px currentColor)}50%{transform:scale(1.12) rotate(3deg);filter:drop-shadow(0 0 18px currentColor)}}
 @keyframes seasonBannerPulse{0%,100%{opacity:.85}50%{opacity:1}}
+@keyframes warTitle{0%,100%{text-shadow:0 0 15px rgba(198,40,40,.4),0 0 30px rgba(198,40,40,.2)}50%{text-shadow:0 0 25px rgba(198,40,40,.7),0 0 50px rgba(198,40,40,.3)}}
+@keyframes warUrgent{0%,100%{opacity:1}50%{opacity:.5}}
 .tab-content{animation:fadeSlideIn .35s cubic-bezier(.22,1,.36,1) both;}
 .card-flip{animation:cardFlip .35s ease both;}
 .gentle-pop{animation:gentlePop .3s cubic-bezier(.22,1,.36,1) both;}
