@@ -615,10 +615,22 @@ function TaskModal({task,user,onClose,onComplete}){
 }
 
 // ── ADVENTURE MAP ──────────────────────────────────────────────────────────────
-function AdventureMap({user,completed,scores,onSelect}){
+function AdventureMap({user,completed,scores,onSelect,onAddScore}){
   const race=RACES.find(r=>r.id===user?.race)||RACES[3];
   const [hov,setHov]=useState(null);
   const [mapZoom,setMapZoom]=useState(null); // {x,y} target for zoom animation
+  const [eggOpen,setEggOpen]=useState(false);
+  const [eggInput,setEggInput]=useState("");
+  const [eggClaimed,setEggClaimed]=useState(()=>localStorage.getItem("hobbit_egg_erebor")==="1");
+  const [eggFlash,setEggFlash]=useState(false);
+  const handleEggSubmit=()=>{
+    if(eggInput==="JUTALOM"&&!eggClaimed){
+      onAddScore?.("easter_erebor",1000000);
+      localStorage.setItem("hobbit_egg_erebor","1");
+      setEggClaimed(true);setEggFlash(true);sfx.achievement?.();
+      setTimeout(()=>{setEggFlash(false);setEggOpen(false);},2200);
+    }else{setEggInput("");}
+  };
   const totalScore=Object.values(scores).reduce((a,b)=>a+b,0);
   const roadCurve=(x1,y1,x2,y2)=>{const dx=x2-x1,dy=y2-y1;return `M${x1} ${y1} C${x1+dx*.35+(dy>0?1.5:-1.5)} ${y1+dy*.15} ${x2-dx*.35+(dy>0?-1.5:1.5)} ${y2-dy*.15} ${x2} ${y2}`;};
   const handleNodeClick=(task,node)=>{
@@ -741,6 +753,8 @@ function AdventureMap({user,completed,scores,onSelect}){
           {[[86,56],[91,55],[87.5,52],[92,53],[85,59],[89,50]].map(([x,y],i)=>
             <circle key={`sp${i}`} cx={x} cy={y} r=".25" fill="#f0c848" opacity=".2" className="map-sparkle"/>
           )}
+          {/* Easter egg — barely visible dot on peak */}
+          {!eggClaimed&&<circle cx="89" cy="26" r="1.2" fill="rgba(201,168,76,.04)" stroke="none" style={{cursor:"pointer"}} onClick={(e)=>{e.stopPropagation();setEggOpen(true);sfx.click?.();}}/>}
         </g>
 
         {/* ─── RIVER — flows between regions ─── */}
@@ -842,6 +856,22 @@ function AdventureMap({user,completed,scores,onSelect}){
           <div style={{width:35,height:1,background:"linear-gradient(90deg,rgba(201,168,76,.22),transparent)"}}/>
         </div>
       </div>
+
+      {/* ═══ EASTER EGG POPUP ═══ */}
+      {eggOpen&&<div style={{position:"absolute",inset:0,zIndex:50,background:"rgba(4,3,2,.88)",display:"flex",alignItems:"center",justifyContent:"center",animation:"fadeIn .4s ease"}} onClick={()=>{if(!eggFlash)setEggOpen(false);}}>
+        <div onClick={e=>e.stopPropagation()} style={{background:"rgba(12,8,4,.97)",border:"1px solid rgba(201,168,76,.18)",padding:"24px 28px",maxWidth:280,textAlign:"center",boxShadow:"0 0 60px rgba(201,168,76,.08)"}}>
+          {eggFlash?<>
+            <div style={{fontSize:"2.5rem",marginBottom:10,animation:"gP 1s ease infinite"}}>💰</div>
+            <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".9rem",color:"var(--gold)",letterSpacing:".1em",marginBottom:6}}>+1 000 000 pont!</div>
+            <div style={{fontFamily:"'EB Garamond',serif",fontSize:".78rem",color:"var(--td)",fontStyle:"italic"}}>Smaug kincsestárának titkát feloldottad!</div>
+          </>:<>
+            <div style={{fontSize:"1.3rem",marginBottom:8,opacity:.5}}>🔐</div>
+            <div style={{fontFamily:"'Cinzel',serif",fontSize:".68rem",color:"rgba(201,168,76,.4)",letterSpacing:".12em",marginBottom:12,textTransform:"uppercase"}}>Titkos kulcsszó</div>
+            <input value={eggInput} onChange={e=>setEggInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleEggSubmit()} placeholder="..." autoFocus style={{width:"100%",padding:"8px 12px",background:"rgba(255,255,255,.03)",border:"1px solid rgba(201,168,76,.12)",color:"var(--gold)",fontFamily:"'Cinzel',serif",fontSize:".8rem",letterSpacing:".15em",textAlign:"center",outline:"none",caretColor:"var(--gold)"}}/>
+            <button onClick={handleEggSubmit} style={{marginTop:10,padding:"6px 20px",background:"none",border:"1px solid rgba(201,168,76,.15)",color:"rgba(201,168,76,.35)",fontFamily:"'Cinzel',serif",fontSize:".55rem",letterSpacing:".12em",cursor:"pointer",textTransform:"uppercase"}}>Megerősít</button>
+          </>}
+        </div>
+      </div>}
 
       {/* ═══ STATUS BAR ═══ */}
       <div style={{position:"absolute",bottom:10,left:"50%",transform:"translateX(-50%)",background:"rgba(8,6,4,.92)",border:"1px solid rgba(201,168,76,.14)",padding:"7px 18px",display:"flex",alignItems:"center",gap:14,backdropFilter:"blur(10px)",zIndex:7,whiteSpace:"nowrap",boxShadow:"0 4px 20px rgba(0,0,0,.5)"}}>
@@ -1240,6 +1270,10 @@ function MiniGamesTab(){
   ];
   const swipeStart=(e)=>{touchRef.current=e.touches?e.touches[0].clientX:e.clientX;};
   const swipeEnd=(e)=>{if(touchRef.current===null)return;const end=e.changedTouches?e.changedTouches[0].clientX:e.clientX;const diff=touchRef.current-end;if(Math.abs(diff)>50){if(diff>0&&carouselIdx<games.length-1)setCarouselIdx(i=>i+1);else if(diff<0&&carouselIdx>0)setCarouselIdx(i=>i-1);}touchRef.current=null;};
+  const startGame=(gid)=>{
+    setActiveGame(gid);
+    try{const plays=JSON.parse(localStorage.getItem("hobbit_minigame_plays")||"{}");plays[gid]=(plays[gid]||0)+1;plays["_t_"+gid]=Date.now();localStorage.setItem("hobbit_minigame_plays",JSON.stringify(plays));}catch(e){}
+  };
   if(activeGame){
     const GAME_MAP={memory:MemoryGame,reaction:ReactionGame,wordsearch:WordSearch,riddle:RiddleGame,archery:ArcheryGame,treasure:TreasureGame};
     const GameComp=GAME_MAP[activeGame]||MemoryGame;
@@ -1263,7 +1297,7 @@ function MiniGamesTab(){
       <div style={{display:"flex",transition:"transform .4s cubic-bezier(.22,1,.36,1)",transform:`translateX(calc(50% - min(130px,35vw) - ${carouselIdx} * (min(260px,70vw) + 16px)))`,gap:16}}>
         {games.map((g,i)=>{
           const isActive=i===carouselIdx;
-          return <div key={g.id} onClick={()=>isActive&&setActiveGame(g.id)} style={{minWidth:"min(260px,70vw)",maxWidth:280,padding:"28px 20px",background:isActive?"rgba(201,168,76,.06)":"rgba(0,0,0,.2)",border:`1px solid ${isActive?g.color:"rgba(201,168,76,.1)"}`,display:"flex",flexDirection:"column",alignItems:"center",gap:14,cursor:isActive?"pointer":"default",transition:"all .35s",transform:isActive?"scale(1)":"scale(.88)",opacity:isActive?1:.4,boxShadow:isActive?`0 0 30px ${g.color}22`:"none",flexShrink:0}}>
+          return <div key={g.id} onClick={()=>isActive&&startGame(g.id)} style={{minWidth:"min(260px,70vw)",maxWidth:280,padding:"28px 20px",background:isActive?"rgba(201,168,76,.06)":"rgba(0,0,0,.2)",border:`1px solid ${isActive?g.color:"rgba(201,168,76,.1)"}`,display:"flex",flexDirection:"column",alignItems:"center",gap:14,cursor:isActive?"pointer":"default",transition:"all .35s",transform:isActive?"scale(1)":"scale(.88)",opacity:isActive?1:.4,boxShadow:isActive?`0 0 30px ${g.color}22`:"none",flexShrink:0}}>
             <div style={{fontSize:"3rem",filter:isActive?`drop-shadow(0 0 12px ${g.color})`:"grayscale(.6)"}}>{g.icon}</div>
             <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"clamp(.9rem,2.5vw,1.1rem)",color:isActive?g.color:"var(--gm)",textAlign:"center"}}>{g.label}</div>
             <div style={{fontStyle:"italic",fontSize:".85rem",color:"var(--td)",textAlign:"center",lineHeight:1.5}}>{g.desc}</div>
@@ -1372,6 +1406,48 @@ const VOTE_OPTIONS=[
   {id:"v5",icon:"🏰",name:"Tünde Fesztivál",desc:"Bakacsinerdő feladatok dupla pont",multiplier:2,taskBonus:10},
   {id:"v6",icon:"⛰️",name:"Hegymászó Hét",desc:"Magányos Hegy feladatok tripla pont",multiplier:3,taskBonus:11},
 ];
+
+// ── BOSS FIGHTS ─────────────────────────────────────────────────────────────
+const BOSSES=[
+  {id:"smaug",name:"Smaug a Rettenetes",icon:"🐉",hp:25000,color:"#B03020",glow:"rgba(176,48,32,.5)",
+    phases:[{at:100,label:"Alvó Sárkány",desc:"Smaug az aranyhalmon szendereg..."},{at:75,label:"Felébred!",desc:"A sárkány szeme felvillan!"},{at:50,label:"Tűzvihar",desc:"Lángok csapnak fel mindenfelé!"},{at:25,label:"Végső Harag",desc:"Smaug dühödten támad!"}],
+    reward:{pts:5000,title:"Sárkányölő"}},
+  {id:"azog",name:"Azog a Gyalázatos",icon:"💀",hp:20000,color:"#4A4A4A",glow:"rgba(74,74,74,.5)",
+    phases:[{at:100,label:"A Vadász",desc:"Azog warg-hátán közelít..."},{at:75,label:"Csata!",desc:"Az ork sereg támad!"},{at:50,label:"Párviadal",desc:"Azog személyesen lép harcba!"},{at:25,label:"Kétségbeesés",desc:"Utolsó, kétségbeesett roham!"}],
+    reward:{pts:4000,title:"Ork-irtó"}},
+  {id:"shelob",name:"Arachne",icon:"🕷️",hp:18000,color:"#2D1B4E",glow:"rgba(45,27,78,.5)",
+    phases:[{at:100,label:"Sötét Barlang",desc:"Valami mozog a sötétben..."},{at:75,label:"Háló!",desc:"Ragacsos pókháló mindenhol!"},{at:50,label:"Mérgező Csapás",desc:"Arachne mérge halálos!"},{at:25,label:"Végső Fullánk",desc:"Kétségbeesett támadás!"}],
+    reward:{pts:3500,title:"Pókvadász"}},
+  {id:"bolg",name:"Bolg, Azog fia",icon:"⚔️",hp:22000,color:"#5C3A1E",glow:"rgba(92,58,30,.5)",
+    phases:[{at:100,label:"A Sereg Érkezik",desc:"Bolg orkjai közelednek..."},{at:75,label:"Ostrom!",desc:"A csata elkezdődött!"},{at:50,label:"Faltörés",desc:"Bolg áttöri a védelmet!"},{at:25,label:"Utolsó Állás",desc:"Mindent vagy semmit!"}],
+    reward:{pts:4500,title:"Seregtörő"}},
+  {id:"goblin_king",name:"Goblin Király",icon:"👑",hp:15000,color:"#6B5B3A",glow:"rgba(107,91,58,.5)",
+    phases:[{at:100,label:"A Trón",desc:"A Goblin Király trónján ül..."},{at:75,label:"Handabanda",desc:"Gúnyos nevetéssel támad!"},{at:50,label:"Goblin Had",desc:"Százával özönlenek a goblinok!"},{at:25,label:"Bukás",desc:"A trón inog!"}],
+    reward:{pts:3000,title:"Goblinverő"}},
+  {id:"warg_chief",name:"Warg Törzsfő",icon:"🐺",hp:16000,color:"#5A4030",glow:"rgba(90,64,48,.5)",
+    phases:[{at:100,label:"Farkas Üvöltés",desc:"Üvöltés hallatszik a hegyekből..."},{at:75,label:"A Falka",desc:"Wargok raja támad!"},{at:50,label:"Harapás",desc:"A vezér szeme vérben forog!"},{at:25,label:"Magányos Farkas",desc:"Az utolsó harc!"}],
+    reward:{pts:3200,title:"Farkasölő"}},
+  {id:"witch_king",name:"Boszorkányúr",icon:"👤",hp:28000,color:"#1A1A2E",glow:"rgba(26,26,46,.5)",
+    phases:[{at:100,label:"Árnyék Közelít",desc:"Hideg szél fúj..."},{at:75,label:"Nazgûl Sikoly",desc:"A sikoly megdermeszti a vért!"},{at:50,label:"Sötét Mágia",desc:"Az Árnyék ereje nő!"},{at:25,label:"Végső Sötétség",desc:"Most vagy soha!"}],
+    reward:{pts:6000,title:"Árnyékvadász"}},
+  {id:"troll_chief",name:"Trollvezér",icon:"🪨",hp:14000,color:"#5A5040",glow:"rgba(90,80,64,.5)",
+    phases:[{at:100,label:"Éjszakai Tábor",desc:"A trollok tüzet raknak..."},{at:75,label:"Harc!",desc:"Hatalmas buzogányok suhognak!"},{at:50,label:"Dühöng",desc:"A trollvezér tajtékzik!"},{at:25,label:"Hajnal Közelít",desc:"Még egy kis kitartás!"}],
+    reward:{pts:2800,title:"Trollvadász"}},
+  {id:"sauron_eye",name:"Szauron Szeme",icon:"👁️",hp:35000,color:"#8B0000",glow:"rgba(139,0,0,.5)",
+    phases:[{at:100,label:"A Szem Keres",desc:"Lángoló tekintet pásztáz..."},{at:75,label:"Megtalált!",desc:"A Szem rád szegeződik!"},{at:50,label:"Akarat Próba",desc:"Elméd ellen tör!"},{at:25,label:"Végső Erőpróba",desc:"Minden erőddel állj ellen!"}],
+    reward:{pts:8000,title:"Szauron Legyőzője"}},
+  {id:"barlog",name:"Durin Végzete (Balrog)",icon:"🔥",hp:30000,color:"#FF4500",glow:"rgba(255,69,0,.5)",
+    phases:[{at:100,label:"Mélység Tüze",desc:"Moria mélyén tűz lobban..."},{at:75,label:"A Híd",desc:"A Khazad-dûm Hídján álltok!"},{at:50,label:"Lángkorbács",desc:"A Balrog ostora csattog!"},{at:25,label:"Zuhanás",desc:"Együtt zuhanunk a mélybe!"}],
+    reward:{pts:7000,title:"Balrog Legyőzője"}},
+  {id:"dragon_cold",name:"Scatha a Hideg",icon:"❄️",hp:20000,color:"#4682B4",glow:"rgba(70,130,180,.5)",
+    phases:[{at:100,label:"Jeges Lehelet",desc:"Fagyos szél kísér..."},{at:75,label:"Jégvihar",desc:"Fagyasztó lehelet mindenhol!"},{at:50,label:"Fagyott Föld",desc:"A talaj megremeg!"},{at:25,label:"Olvadás",desc:"Az utolsó erőpróba!"}],
+    reward:{pts:4000,title:"Jégsárkány Ölő"}},
+  {id:"mouth_sauron",name:"Szauron Szája",icon:"🗣️",hp:17000,color:"#3D0C02",glow:"rgba(61,12,2,.5)",
+    phases:[{at:100,label:"A Követ",desc:"Sötét alak közelít a kapuhoz..."},{at:75,label:"Hazugságok",desc:"Mérgezett szavak csapdája!"},{at:50,label:"Fenyegetés",desc:"Az Fekete Kapu megremeg!"},{at:25,label:"Leleplezés",desc:"Az igazság ereje győz!"}],
+    reward:{pts:3500,title:"Igazmondó"}},
+];
+const _getMonthlyBoss=()=>BOSSES[new Date().getMonth()%BOSSES.length];
+const _getBossMonth=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;};
 
 // ── SEASONAL EVENTS ──────────────────────────────────────────────────────────
 const SEASONAL_EVENTS=[
@@ -1680,6 +1756,13 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
   const [clanWar,setClanWar]=useState(null);
   const [clanEvents,setClanEvents]=useState([]);
   const [warTarget,setWarTarget]=useState("");
+  const [clanBoss,setClanBoss]=useState(null);
+  const [bossAttackCd,setBossAttackCd]=useState(0);
+  const [,forceRender]=useState(0);
+  const monthlyBoss=_getMonthlyBoss();
+  const bossMonth=_getBossMonth();
+  // Cooldown timer tick
+  useEffect(()=>{if(bossAttackCd<=Date.now())return;const id=setInterval(()=>{if(Date.now()>=bossAttackCd){clearInterval(id);forceRender(x=>x+1);}else forceRender(x=>x+1);},1000);return()=>clearInterval(id);},[bossAttackCd]);
 
   // Load clan data
   useEffect(()=>{
@@ -1771,6 +1854,16 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
     {id:"w18",icon:"💍",name:"A Gyűrű Hatalma",desc:"Érj el 90%+ pontot bármely feladatban",pts:100,type:"perfect",goal:90},
     {id:"w19",icon:"⛏️",name:"Durin Öröksége",desc:"Teljesíts 10 feladatot",pts:200,type:"tasks",goal:10},
     {id:"w20",icon:"🏆",name:"Középfölde Hőse",desc:"Gyűjts 2000 pontot és teljesíts 10 feladatot",pts:300,type:"ultimate",goal:{score:2000,tasks:10}},
+    {id:"w21",icon:"🌙",name:"Éjjeli Őrjárat",desc:"Teljesíts 2 feladatot",pts:55,type:"tasks",goal:2},
+    {id:"w22",icon:"🦅",name:"Sasok Érkezése",desc:"Érj el 150+ pontot egy feladatban",pts:65,type:"single_score",goal:150},
+    {id:"w23",icon:"🧝",name:"Tünde Szövetség",desc:"Teljesíts feladatot 2 különböző helyszínen",pts:55,type:"locations",goal:2},
+    {id:"w24",icon:"🔨",name:"Durin Kovácsai",desc:"Gyűjts 300 pontot összesen",pts:75,type:"total_score",goal:300},
+    {id:"w25",icon:"🌿",name:"Radagast Próbája",desc:"Játssz a Szókereső mini-játékban",pts:40,type:"minigame",goal:"wordsearch"},
+    {id:"w26",icon:"📖",name:"Krónikás",desc:"Teljesíts 4 feladatot",pts:95,type:"tasks",goal:4},
+    {id:"w27",icon:"🎯",name:"Mesterlövész",desc:"Érj el 250+ pontot egy feladatban",pts:85,type:"single_score",goal:250},
+    {id:"w28",icon:"🏰",name:"Rivendell Védelme",desc:"Teljesítsd a Rivendell feladatot",pts:70,type:"specific_task",goal:2},
+    {id:"w29",icon:"🕸️",name:"Pókirtás",desc:"Teljesítsd a Bakacsinerdő feladatát",pts:70,type:"specific_task",goal:3},
+    {id:"w30",icon:"💫",name:"Csillagvándor",desc:"Gyűjts 750 pontot összesen",pts:130,type:"total_score",goal:750},
   ];
 
   const CLAN_EVENTS=[
@@ -1780,7 +1873,7 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
     {id:"perfect_run",icon:"⭐",name:"Tökéletes Futam",desc:"5 feladatot 90%+ ponttal teljesítenek",goal:5,unit:"feladat",duration:72},
   ];
 
-  // Load clan war + events
+  // Load clan war + events + boss
   useEffect(()=>{
     if(!myClan?.id)return;
     try{
@@ -1789,19 +1882,112 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
       const db=getDatabase();
       const warRef=fbRef(db,`clans/${myClan.id}/war`);
       const evRef=fbRef(db,`clans/${myClan.id}/events`);
+      const bossRef=fbRef(db,`clans/${myClan.id}/boss`);
       onValue(warRef,(s)=>setClanWar(s.val()||null));
       onValue(evRef,(s)=>{const d=s.val();setClanEvents(d?Object.entries(d).map(([k,v])=>({...v,fbKey:k})):[]); });
-      return()=>{off(warRef);off(evRef);};
+      onValue(bossRef,(s)=>setClanBoss(s.val()||null));
+      return()=>{off(warRef);off(evRef);off(bossRef);};
     }catch(e){}
   },[myClan?.id]);
 
-  // Pick 5 random missions for a war (seeded by war start time)
+  // Pick 7 random missions for a war (seeded by war start time)
   const _pickWarMissions=(seed)=>{
     const rng=(s)=>{s=Math.imul(s^(s>>>16),0x45d9f3b);s=Math.imul(s^(s>>>13),0x45d9f3b);return((s^(s>>>16))>>>0)/4294967296;};
     const pool=[...WAR_MISSIONS];const picked=[];
-    for(let i=0;i<5&&pool.length;i++){const idx=Math.floor(rng(seed+i*7919)*pool.length);picked.push(pool.splice(idx,1)[0]);}
+    for(let i=0;i<7&&pool.length;i++){const idx=Math.floor(rng(seed+i*7919)*pool.length);picked.push(pool.splice(idx,1)[0]);}
     return picked;
   };
+
+  // ── WAR BASELINE & VERIFICATION ──
+  const warBaselineKey=clanWar?`hobbit_war_bl_${clanWar.started}`:null;
+  const [warBaseline]=useState(()=>{
+    if(!warBaselineKey)return null;
+    try{const saved=localStorage.getItem(warBaselineKey);if(saved)return JSON.parse(saved);}catch(e){}
+    const bl={tasks:[...completed],score:totalScore,saved:Date.now()};
+    try{localStorage.setItem(warBaselineKey,JSON.stringify(bl));}catch(e){}
+    return bl;
+  });
+
+  const getWarMissionProgress=(mission)=>{
+    if(!warBaseline||!clanWar)return{met:false,current:0,goal:typeof mission.goal==="object"?1:mission.goal,label:""};
+    const newTasks=completed.filter(t=>!warBaseline.tasks.includes(t));
+    const gained=Math.max(0,totalScore-warBaseline.score);
+    switch(mission.type){
+      case"tasks":return{met:newTasks.length>=mission.goal,current:newTasks.length,goal:mission.goal,label:"feladat"};
+      case"single_score":{const best=Math.max(0,...Object.values(scores));return{met:best>=mission.goal,current:best,goal:mission.goal,label:"pont"};}
+      case"total_score":return{met:gained>=mission.goal,current:gained,goal:mission.goal,label:"pont"};
+      case"specific_task":{const done=completed.includes(mission.goal)&&!warBaseline.tasks.includes(mission.goal);return{met:done,current:done?1:0,goal:1,label:"feladat"};}
+      case"speed":return{met:false,current:0,goal:1,label:"feladat"};
+      case"minigame":{try{const plays=JSON.parse(localStorage.getItem("hobbit_minigame_plays")||"{}");const ts=plays["_t_"+mission.goal]||0;const played=ts>clanWar.started;return{met:played,current:played?1:0,goal:1,label:"játék"};}catch(e){return{met:false,current:0,goal:1,label:"játék"};}}
+      case"diff_minigames":{try{const plays=JSON.parse(localStorage.getItem("hobbit_minigame_plays")||"{}");const unique=["memory","reaction","wordsearch","riddle","archery","treasure"].filter(g=>(plays["_t_"+g]||0)>clanWar.started).length;return{met:unique>=mission.goal,current:unique,goal:mission.goal,label:"játék"};}catch(e){return{met:false,current:0,goal:mission.goal,label:"játék"};}}
+      case"perfect":{const any90=TASKS.some(t=>{const s=scores[t.id];return s&&!warBaseline.tasks.includes(t.id)&&(s/t.basePoints*100)>=mission.goal;});return{met:any90,current:any90?1:0,goal:1,label:"feladat"};}
+      case"locations":{const locs=new Set(newTasks.map(tid=>TASKS.find(t=>t.id===tid)?.location).filter(Boolean));return{met:locs.size>=mission.goal,current:locs.size,goal:mission.goal,label:"helyszín"};}
+      case"ultimate":{const scoreMet=gained>=mission.goal.score;const tasksMet=newTasks.length>=mission.goal.tasks;return{met:scoreMet&&tasksMet,current:0,goal:1,label:`${newTasks.length}/${mission.goal.tasks} feladat, ${gained}/${mission.goal.score} pont`};}
+      default:return{met:false,current:0,goal:1,label:""};
+    }
+  };
+
+  // Auto-complete verified missions
+  useEffect(()=>{
+    if(!clanWar||clanWar.status!=="active"||!myClan||!warBaseline)return;
+    const side=clanWar.challenger.id===myClan.id?"challenger":"defender";
+    (clanWar.missions||[]).forEach(mid=>{
+      const m=WAR_MISSIONS.find(w=>w.id===mid);if(!m)return;
+      const done=!!clanWar[side]?.completed?.[myName+"_"+mid];
+      if(done)return;
+      const prog=getWarMissionProgress(m);
+      if(prog.met)completeWarMission(mid);
+    });
+  },[completed.length,totalScore,clanWar?.status]);
+
+  // ── BOSS FIGHT ──
+  const initBoss=()=>{
+    if(!myClan)return;
+    try{
+      const {getDatabase,ref:fbRef,set}=window.__fbDB||{};
+      if(!getDatabase)return;
+      const db=getDatabase();
+      const bossData={bossId:monthlyBoss.id,month:bossMonth,maxHp:monthlyBoss.hp,currentHp:monthlyBoss.hp,contributors:{},defeated:false,defeatedAt:null};
+      set(fbRef(db,`clans/${myClan.id}/boss`),bossData);
+      setClanBoss(bossData);sfx.dice?.();
+      setClanMsg({ok:true,t:`${monthlyBoss.name} megjelent!`});setTimeout(()=>setClanMsg(null),2500);
+    }catch(e){}
+  };
+
+  const attackBoss=()=>{
+    if(!clanBoss||clanBoss.defeated||!myClan||bossAttackCd>Date.now())return;
+    const dmg=100+completed.length*20+Math.floor(totalScore/50);
+    try{
+      const {getDatabase,ref:fbRef,get:fbGet,update,set:fbSet}=window.__fbDB||{};
+      if(!getDatabase)return;
+      const db=getDatabase();
+      const bossPath=`clans/${myClan.id}/boss`;
+      fbGet(fbRef(db,bossPath)).then(snap=>{
+        const b=snap.val();if(!b||b.defeated)return;
+        const newHp=Math.max(0,b.currentHp-dmg);
+        const myDmg=(b.contributors?.[myName]?.damage||0)+dmg;
+        const myHits=(b.contributors?.[myName]?.hits||0)+1;
+        const updates={currentHp:newHp,[`contributors/${myName}`]:{damage:myDmg,hits:myHits,name:myName}};
+        if(newHp<=0){updates.defeated=true;updates.defeatedAt=Date.now();}
+        update(fbRef(db,bossPath),updates);
+        if(newHp<=0){
+          sfx.achievement?.();
+          const boss=BOSSES.find(bb=>bb.id===b.bossId)||monthlyBoss;
+          onAddScore?.("boss_"+bossMonth,boss.reward.pts);
+          setClanMsg({ok:true,t:`${boss.name} legyőzve! +${boss.reward.pts} pont!`});setTimeout(()=>setClanMsg(null),3500);
+        }else{
+          sfx.click?.();
+        }
+      });
+      setBossAttackCd(Date.now()+60000);
+    }catch(e){}
+  };
+
+  const bossPhase=clanBoss?(()=>{
+    const pct=Math.round((clanBoss.currentHp/(clanBoss.maxHp||1))*100);
+    const boss=BOSSES.find(b=>b.id===clanBoss.bossId)||monthlyBoss;
+    return boss.phases.find(p=>pct<=p.at)||boss.phases[0];
+  })():null;
 
   const startClanWar=(targetClanId)=>{
     if(!myClan||!targetClanId)return;
@@ -1814,6 +2000,8 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
         const enemy=snap.val();
         const now=Date.now();
         const missions=_pickWarMissions(now).map(m=>m.id);
+        // Save baseline at war start
+        try{localStorage.setItem(`hobbit_war_bl_${now}`,JSON.stringify({tasks:[...completed],score:totalScore,saved:now}));}catch(e){}
         const warData={
           started:now,expires:now+48*3600000,missions,
           challenger:{id:myClan.id,name:myClan.name,score:0,completed:{},members:{}},
@@ -2320,6 +2508,78 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
           <button onClick={leaveClan} style={{padding:"10px",background:"rgba(229,57,53,.06)",border:"1px solid rgba(229,57,53,.2)",color:"#EF9A9A",fontFamily:"'Cinzel',serif",fontSize:".65rem",letterSpacing:".1em",cursor:"pointer",borderRadius:4,marginTop:4}}>Kilépés a klánból ✕</button>
         </div>
 
+        {/* ═══ BOSS FIGHT ═══ */}
+        <div style={{position:"relative",padding:"18px 16px",background:`linear-gradient(180deg,${monthlyBoss.color}18,rgba(0,0,0,.3))`,border:`1px solid ${monthlyBoss.color}55`,overflow:"hidden"}}>
+          <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:`linear-gradient(90deg,transparent,${monthlyBoss.color},transparent)`}}/>
+          <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1rem",color:monthlyBoss.color,textAlign:"center",letterSpacing:".18em",textShadow:`0 0 20px ${monthlyBoss.glow}`}}>HAVI BOSS</div>
+          <div style={{fontSize:"3rem",textAlign:"center",marginTop:6,filter:`drop-shadow(0 0 18px ${monthlyBoss.glow})`,animation:"gP 2.5s ease infinite"}}>{monthlyBoss.icon}</div>
+          <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.1rem",color:monthlyBoss.color,textAlign:"center",marginTop:4,letterSpacing:".1em"}}>{monthlyBoss.name}</div>
+
+          {(!clanBoss||clanBoss.month!==bossMonth)?<div style={{textAlign:"center",padding:"14px 0"}}>
+            <div style={{fontFamily:"'EB Garamond',serif",fontSize:".82rem",color:"var(--td)",fontStyle:"italic",marginBottom:12}}>{monthlyBoss.phases[0].desc}</div>
+            {myClan.leader===myName
+              ?<button onClick={initBoss} style={{padding:"10px 24px",background:`${monthlyBoss.color}15`,border:`1px solid ${monthlyBoss.color}88`,color:monthlyBoss.color,fontFamily:"'Cinzel',serif",fontSize:".75rem",letterSpacing:".1em",cursor:"pointer",textTransform:"uppercase"}}>⚔️ Harc Indítása</button>
+              :<div style={{fontFamily:"'Cinzel',serif",fontSize:".68rem",color:"var(--gm)",fontStyle:"italic"}}>A klánvezér indíthatja a boss harcot.</div>}
+          </div>
+
+          :clanBoss.defeated?<div style={{textAlign:"center",padding:"14px 0"}}>
+            <div style={{fontSize:"2rem",marginBottom:6}}>🏆</div>
+            <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".9rem",color:"#66BB6A",letterSpacing:".1em"}}>LEGYŐZVE!</div>
+            <div style={{fontFamily:"'EB Garamond',serif",fontSize:".78rem",color:"var(--td)",fontStyle:"italic",marginTop:4}}>A klán legyőzte {monthlyBoss.name}-t!</div>
+            <div style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",color:"var(--gold)",marginTop:6}}>Jutalom: +{monthlyBoss.reward.pts} pont · 🏅 „{monthlyBoss.reward.title}"</div>
+            {/* Top contributors */}
+            {clanBoss.contributors&&<div style={{marginTop:10,display:"flex",flexDirection:"column",gap:3}}>
+              <div style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:"var(--gm)",letterSpacing:".1em",textTransform:"uppercase"}}>— Hősök —</div>
+              {Object.values(clanBoss.contributors).sort((a,b)=>b.damage-a.damage).slice(0,5).map((c,i)=><div key={c.name} style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",color:c.name===myName?"var(--gold)":"var(--gm)"}}>{i+1}. {c.name} — {c.damage} sebzés ({c.hits} csapás)</div>)}
+            </div>}
+          </div>
+
+          :<div style={{padding:"10px 0",display:"flex",flexDirection:"column",gap:10}}>
+            {/* Phase info */}
+            <div style={{textAlign:"center"}}>
+              <div style={{fontFamily:"'Cinzel',serif",fontSize:".6rem",color:monthlyBoss.color,letterSpacing:".12em",textTransform:"uppercase"}}>{bossPhase?.label}</div>
+              <div style={{fontFamily:"'EB Garamond',serif",fontSize:".78rem",color:"var(--td)",fontStyle:"italic",marginTop:2}}>{bossPhase?.desc}</div>
+            </div>
+            {/* HP Bar */}
+            {(()=>{const pct=Math.max(0,Math.round((clanBoss.currentHp/clanBoss.maxHp)*100));const urgent=pct<=25;return <div>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                <span style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:urgent?"#66BB6A":"#EF9A9A",letterSpacing:".08em"}}>HP</span>
+                <span style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:urgent?"#66BB6A":"#EF9A9A"}}>{clanBoss.currentHp.toLocaleString()} / {clanBoss.maxHp.toLocaleString()}</span>
+              </div>
+              <div style={{height:14,background:"rgba(0,0,0,.5)",borderRadius:7,overflow:"hidden",border:`1px solid ${urgent?"rgba(102,187,106,.3)":"rgba(198,40,40,.3)"}`}}>
+                <div style={{height:"100%",width:`${pct}%`,background:urgent?"linear-gradient(90deg,#2E7D32,#66BB6A)":`linear-gradient(90deg,${monthlyBoss.color},#EF9A9A)`,transition:"width .8s cubic-bezier(.22,1,.36,1)",borderRadius:7,boxShadow:urgent?"0 0 12px rgba(102,187,106,.5)":`0 0 12px ${monthlyBoss.glow}`,position:"relative",overflow:"hidden"}}>
+                  <div style={{position:"absolute",inset:0,background:"linear-gradient(90deg,transparent 40%,rgba(255,255,255,.15) 50%,transparent 60%)",animation:"searchSlide 2s ease-in-out infinite"}}/>
+                </div>
+              </div>
+              <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".7rem",color:monthlyBoss.color,textAlign:"center",marginTop:4}}>{pct}%</div>
+            </div>;})()}
+            {/* Attack button */}
+            {(()=>{const cdLeft=Math.max(0,bossAttackCd-Date.now());const canAttack=cdLeft<=0;const dmg=100+completed.length*20+Math.floor(totalScore/50);return <div style={{textAlign:"center"}}>
+              <button onClick={attackBoss} disabled={!canAttack} style={{padding:"12px 28px",background:canAttack?`${monthlyBoss.color}18`:"rgba(0,0,0,.2)",border:`1px solid ${canAttack?monthlyBoss.color+"88":"rgba(201,168,76,.1)"}`,color:canAttack?monthlyBoss.color:"var(--gm)",fontFamily:"'Cinzel',serif",fontSize:".8rem",letterSpacing:".12em",cursor:canAttack?"pointer":"default",textTransform:"uppercase",opacity:canAttack?1:.5,transition:"all .3s"}}>⚔️ Támadás ({dmg} sebzés)</button>
+              {!canAttack&&<div style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:"var(--gm)",marginTop:4}}>Újratöltés: {Math.ceil(cdLeft/1000)}s</div>}
+              <div style={{fontFamily:"'Cinzel',serif",fontSize:".45rem",color:"var(--gm)",marginTop:4,opacity:.6}}>Sebzés = 100 + feladatok×20 + pont/50</div>
+            </div>;})()}
+            {/* My contribution */}
+            {clanBoss.contributors?.[myName]&&<div style={{padding:"8px 12px",background:"rgba(201,168,76,.04)",border:"1px solid rgba(201,168,76,.12)",borderRadius:4,textAlign:"center"}}>
+              <div style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:"var(--gm)",letterSpacing:".08em"}}>A te hozzájárulásod</div>
+              <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".9rem",color:"var(--gold)",marginTop:2}}>{clanBoss.contributors[myName].damage} sebzés</div>
+              <div style={{fontFamily:"'Cinzel',serif",fontSize:".45rem",color:"var(--gm)"}}>{clanBoss.contributors[myName].hits} csapás</div>
+            </div>}
+            {/* Top contributors */}
+            {clanBoss.contributors&&Object.keys(clanBoss.contributors).length>0&&<div style={{display:"flex",flexDirection:"column",gap:3}}>
+              <div style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:"var(--gm)",letterSpacing:".1em",textTransform:"uppercase",textAlign:"center"}}>— Harcosok —</div>
+              {Object.values(clanBoss.contributors).sort((a,b)=>b.damage-a.damage).slice(0,5).map((c,i)=>{
+                const medal=i===0?"🥇":i===1?"🥈":i===2?"🥉":"";
+                return <div key={c.name} style={{display:"flex",alignItems:"center",gap:6,padding:"4px 8px",background:c.name===myName?"rgba(201,168,76,.06)":"transparent",borderRadius:3}}>
+                  <span style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:"var(--gm)",minWidth:14}}>{medal||`${i+1}.`}</span>
+                  <span style={{fontFamily:"'Cinzel',serif",fontSize:".6rem",color:c.name===myName?"var(--gold)":"var(--text)",flex:1}}>{c.name}</span>
+                  <span style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",color:monthlyBoss.color}}>{c.damage}</span>
+                </div>;
+              })}
+            </div>}
+          </div>}
+        </div>
+
         {/* ═══ CLAN WAR ═══ */}
         <div style={{position:"relative",padding:"18px 16px",background:"linear-gradient(180deg,rgba(139,0,0,.12),rgba(0,0,0,.3))",border:"1px solid rgba(198,40,40,.3)",overflow:"hidden"}}>
           <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:"linear-gradient(90deg,transparent,#C62828,#FF6F00,#C62828,transparent)"}}/>
@@ -2334,7 +2594,7 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
               <div style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",color:"var(--gm)",marginTop:3}}>{m.name}</div>
             </div>)}
           </div>
-          <div style={{fontFamily:"'EB Garamond',serif",fontSize:".82rem",color:"var(--td)",textAlign:"center",fontStyle:"italic"}}>20 egyedi küldetés — 5 véletlenszerű minden háborúban</div>
+          <div style={{fontFamily:"'EB Garamond',serif",fontSize:".82rem",color:"var(--td)",textAlign:"center",fontStyle:"italic"}}>30 egyedi küldetés — 7 véletlenszerű minden háborúban</div>
           {myClan.leader===myName?<>
             <input value={warTarget} onChange={e=>setWarTarget(e.target.value)} placeholder="Ellenfél klán kódja..." style={{background:"rgba(0,0,0,.5)",border:"1px solid rgba(198,40,40,.25)",color:"var(--text)",fontFamily:"'EB Garamond',serif",fontSize:".9rem",padding:"10px 14px",outline:"none",borderRadius:4}}/>
             <button onClick={()=>startClanWar(warTarget)} style={{padding:"12px",background:"linear-gradient(135deg,rgba(198,40,40,.15),rgba(139,0,0,.1))",border:"1px solid rgba(198,40,40,.5)",color:"#EF9A9A",fontFamily:"'Cinzel Decorative',serif",fontSize:".8rem",letterSpacing:".14em",cursor:"pointer",borderRadius:4,textShadow:"0 0 12px rgba(198,40,40,.4)"}}>Háború Indítása ⚔️</button>
@@ -2381,16 +2641,25 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
               const m=WAR_MISSIONS.find(w=>w.id===mid);if(!m)return null;
               const side=clanWar.challenger.id===myClan.id?"challenger":"defender";
               const done=!!clanWar[side]?.completed?.[myName+"_"+mid];
-              return <div key={mid} style={{padding:"12px 14px",background:done?"rgba(102,187,106,.06)":"rgba(198,40,40,.03)",border:`1px solid ${done?"rgba(102,187,106,.25)":"rgba(198,40,40,.12)"}`,borderRadius:4,display:"flex",alignItems:"center",gap:12,transition:"all .3s",position:"relative",overflow:"hidden"}}>
+              const prog=!done?getWarMissionProgress(m):null;
+              const pct=prog?Math.min(100,Math.round(prog.current/prog.goal*100)):100;
+              return <div key={mid} style={{padding:"12px 14px",background:done?"rgba(102,187,106,.06)":"rgba(198,40,40,.03)",border:`1px solid ${done?"rgba(102,187,106,.25)":"rgba(198,40,40,.12)"}`,borderRadius:4,display:"flex",flexDirection:"column",gap:6,transition:"all .3s",position:"relative",overflow:"hidden"}}>
                 {done&&<div style={{position:"absolute",top:0,left:0,bottom:0,width:3,background:"#66BB6A"}}/>}
-                <span style={{fontSize:"1.4rem",filter:done?"none":"drop-shadow(0 0 6px rgba(198,40,40,.4))",flexShrink:0}}>{m.icon}</span>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontFamily:"'Cinzel',serif",fontSize:".75rem",color:done?"#66BB6A":"var(--text)"}}>{m.name}</div>
-                  <div style={{fontFamily:"'EB Garamond',serif",fontSize:".75rem",color:"var(--gm)",fontStyle:"italic"}}>{m.desc}</div>
-                  <div style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:done?"#66BB6A":"#EF9A9A",marginTop:3}}>+{m.pts} háborús pont</div>
+                <div style={{display:"flex",alignItems:"center",gap:12}}>
+                  <span style={{fontSize:"1.4rem",filter:done?"none":"drop-shadow(0 0 6px rgba(198,40,40,.4))",flexShrink:0}}>{m.icon}</span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontFamily:"'Cinzel',serif",fontSize:".75rem",color:done?"#66BB6A":"var(--text)"}}>{m.name}</div>
+                    <div style={{fontFamily:"'EB Garamond',serif",fontSize:".75rem",color:"var(--gm)",fontStyle:"italic"}}>{m.desc}</div>
+                    <div style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:done?"#66BB6A":"#EF9A9A",marginTop:3}}>+{m.pts} háborús pont</div>
+                  </div>
+                  {done&&<span style={{fontSize:"1.2rem",flexShrink:0}}>✅</span>}
                 </div>
-                {done?<span style={{fontSize:"1.2rem",flexShrink:0}}>✅</span>
-                  :<button onClick={()=>completeWarMission(mid)} style={{padding:"6px 12px",background:"rgba(198,40,40,.1)",border:"1px solid rgba(198,40,40,.35)",color:"#EF9A9A",fontFamily:"'Cinzel',serif",fontSize:".58rem",cursor:"pointer",borderRadius:3,flexShrink:0,whiteSpace:"nowrap"}}>Kész ⚔️</button>}
+                {!done&&<div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <div style={{flex:1,height:4,background:"rgba(255,255,255,.05)",borderRadius:2,overflow:"hidden"}}>
+                    <div style={{height:"100%",width:`${pct}%`,background:pct>=100?"#66BB6A":"linear-gradient(90deg,#8B0000,#EF9A9A)",transition:"width .5s",borderRadius:2}}/>
+                  </div>
+                  <span style={{fontFamily:"'Cinzel',serif",fontSize:".48rem",color:pct>=100?"#66BB6A":"var(--gm)",flexShrink:0,whiteSpace:"nowrap"}}>{m.type==="ultimate"?prog.label:`${prog.current}/${prog.goal} ${prog.label}`}</span>
+                </div>}
               </div>;
             })}
           </div>
@@ -2819,7 +3088,7 @@ export default function HobbitApp(){
         {/* Content */}
         <ErrorCatch>
         <div style={{flex:1,display:"flex",flexDirection:"column",minHeight:0,overflow:"hidden"}}>
-          {tab==="map"    &&<div key="map" className="tab-content" style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}>{(()=>{const ss=_getActiveSeason();return ss?<button onClick={()=>{setTab("profile");}} style={{padding:"8px 16px",background:ss.bg,border:"none",borderBottom:`1px solid ${ss.border}`,display:"flex",alignItems:"center",justifyContent:"center",gap:10,cursor:"pointer",flexShrink:0,animation:"seasonBannerPulse 4s ease-in-out infinite"}}><span style={{fontSize:"1rem"}}>{ss.icon}</span><span style={{fontFamily:"'Cinzel',serif",fontSize:".62rem",color:ss.color,letterSpacing:".1em"}}>{ss.name} — Aktív!</span><span style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:"var(--gm)",letterSpacing:".06em"}}>Részletek ›</span></button>:null;})()}<AdventureMap user={user} completed={completed} scores={scores} onSelect={setActiveTask}/></div>}
+          {tab==="map"    &&<div key="map" className="tab-content" style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}>{(()=>{const ss=_getActiveSeason();return ss?<button onClick={()=>{setTab("profile");}} style={{padding:"8px 16px",background:ss.bg,border:"none",borderBottom:`1px solid ${ss.border}`,display:"flex",alignItems:"center",justifyContent:"center",gap:10,cursor:"pointer",flexShrink:0,animation:"seasonBannerPulse 4s ease-in-out infinite"}}><span style={{fontSize:"1rem"}}>{ss.icon}</span><span style={{fontFamily:"'Cinzel',serif",fontSize:".62rem",color:ss.color,letterSpacing:".1em"}}>{ss.name} — Aktív!</span><span style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:"var(--gm)",letterSpacing:".06em"}}>Részletek ›</span></button>:null;})()}<AdventureMap user={user} completed={completed} scores={scores} onSelect={setActiveTask} onAddScore={(key,pts)=>{setScores(s=>{const next={...s,[key]:(s[key]||0)+pts};localStorage.setItem("hobbit_task_scores",JSON.stringify(next));const cu=JSON.parse(localStorage.getItem("hobbit_current")||"{}");cu.score=Object.values(next).reduce((a,b)=>a+b,0);localStorage.setItem("hobbit_current",JSON.stringify(cu));return next;});}}/></div>}
           {tab==="games"  &&<div key="games" className="tab-content" style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}><MiniGamesTab/></div>}
           {tab==="profile"&&<div key="profile" className="tab-content" style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}><ProfileTab user={user} completed={completed} scores={scores} onInviteFriend={(friendName)=>{setTab("board");}} onAddScore={(key,pts)=>{setScores(s=>{const next={...s,[key]:(s[key]||0)+pts};localStorage.setItem("hobbit_task_scores",JSON.stringify(next));const cu=JSON.parse(localStorage.getItem("hobbit_current")||"{}");cu.score=Object.values(next).reduce((a,b)=>a+b,0);localStorage.setItem("hobbit_current",JSON.stringify(cu));return next;});}}/></div>}
           {tab==="board"  &&<div key="board" className="tab-content" style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}><BoardGameTab user={user} onBack={()=>setTab("map")}/></div>}

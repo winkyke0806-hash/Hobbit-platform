@@ -983,6 +983,15 @@ export default function BoardGame({user,onBack}){
 
   const joinGame=async(code,asSpectator=false)=>{
     const id=(code||"").trim().toUpperCase();if(!id){notify("Írd be a kódot!","#EF9A9A");return;}
+    // Easter egg
+    if(id==="BILBO"&&localStorage.getItem("hobbit_egg_bilbo")!=="1"){
+      const newElo=myElo+10000;setMyElo(newElo);
+      await set(ref(db,`users/${pid}/profile/elo`),newElo);
+      localStorage.setItem("hobbit_egg_bilbo","1");
+      sfx.achievement?.();burst("#FFD700");
+      notify("🍀 +10 000 ELO! Bilbo titkát feloldottad!","#66BB6A",4000);return;
+    }
+    if(id==="BILBO"){notify("Ezt a titkot már feloldottad!","var(--dim)");return;}
     const snap=await get(ref(db,`games/${id}`));if(!snap.exists()){notify("Nincs ilyen szoba!","#EF9A9A");return;}
     const d=snap.val();
     if(asSpectator){
