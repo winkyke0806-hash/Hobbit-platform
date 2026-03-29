@@ -1350,7 +1350,7 @@ const _getAvatarConfig=()=>{try{return JSON.parse(localStorage.getItem("hobbit_a
 const _saveAvatarConfig=(cfg)=>{localStorage.setItem("hobbit_avatar",JSON.stringify(cfg));};
 
 function AvatarDisplay({race,frame,size=56,showPulse=true}){
-  const f=AVATAR_FRAMES.find(a=>a.id===frame)||AVATAR_FRAMES[0];
+  const f=AVATAR_FRAMES.find(a=>a.id===frame)||(()=>{const si=SHOP_ITEMS.find(s=>s.type==="frame"&&s.frameData?.id===frame);return si?{id:si.frameData.id,name:si.frameData.name,border:si.frameData.border||"2.5px solid",glow:si.frameData.glow,pulse:si.frameData.pulse,innerRing:si.frameData.innerRing}:null;})()||AVATAR_FRAMES[0];
   const fs=size>=48?"1.6rem":size>=32?"1rem":".7rem";
   return <div style={{position:"relative",width:size,height:size}}>
     {f.pulse&&showPulse&&<div style={{position:"absolute",inset:-4,borderRadius:"50%",border:`1.5px solid ${race.color}44`,animation:"avatarPulse 3s ease-in-out infinite","--rc":race.color}}/>}
@@ -1434,6 +1434,7 @@ const STAR_REWARDS=[
   // Legendary pool
   {rarity:"legendary",icon:"💰",label:"+5000 Pont",type:"pts",amount:5000},
   {rarity:"legendary",icon:"💰",label:"+10 000 JACKPOT",type:"pts",amount:10000},
+  {rarity:"legendary",icon:"💎",label:"+10 000 000 MEGA JACKPOT",type:"pts",amount:10000000},
   {rarity:"legendary",icon:"⚡",label:"+500 ELO",type:"elo",amount:500},
   {rarity:"legendary",icon:"⚡",label:"+1000 MEGA ELO",type:"elo",amount:1000},
   {rarity:"legendary",icon:"🌟",label:"Legendás Aura Keret",type:"frame",frameId:"legendary_aura",frameName:"Legendás Aura"},
@@ -2317,7 +2318,7 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
           <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"clamp(.85rem,2.5vw,1.1rem)",color:"var(--gold)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user?.adventureName||"Ismeretlen"}</div>
           <div style={{display:"flex",alignItems:"center",gap:6,marginTop:2,flexWrap:"wrap"}}>
             <span style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",color:race.color,letterSpacing:".06em",textTransform:"uppercase"}}>{race.id}</span>
-            {(()=>{const t=AVATAR_TITLES.find(t=>t.id===(avatarCfg.title||"wanderer"));return t?<span style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:"var(--gold)",background:"rgba(201,168,76,.08)",border:"1px solid rgba(201,168,76,.25)",borderRadius:12,padding:"1px 8px",letterSpacing:".05em",whiteSpace:"nowrap"}}>"{t.title}"</span>:null;})()}
+            {(()=>{const tid=avatarCfg.title||"wanderer";const t=AVATAR_TITLES.find(t=>t.id===tid)||(()=>{const si=SHOP_ITEMS.find(s=>s.type==="title"&&s.titleData?.id===tid);return si?{id:si.titleData.id,title:si.titleData.title}:null;})();return t?<span style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:"var(--gold)",background:"rgba(201,168,76,.08)",border:"1px solid rgba(201,168,76,.25)",borderRadius:12,padding:"1px 8px",letterSpacing:".05em",whiteSpace:"nowrap"}}>"{t.title}"</span>:null;})()}
             <span style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:rank.color,background:`${rank.color}15`,border:`1px solid ${rank.color}33`,borderRadius:12,padding:"1px 8px",letterSpacing:".05em",whiteSpace:"nowrap"}}>{rank.label}</span>
             <span style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:eloRank.color,background:`${eloRank.color}15`,border:`1px solid ${eloRank.color}33`,borderRadius:12,padding:"1px 8px",letterSpacing:".05em",whiteSpace:"nowrap"}}>{eloRank.icon} {myElo} ELO</span>
           </div>
@@ -2359,6 +2360,14 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
                 {!unlocked&&<span style={{fontFamily:"'Cinzel',serif",fontSize:".38rem",color:"var(--gm)",whiteSpace:"nowrap"}}>{f.req}</span>}
               </button>;
             })}
+            {/* Shop-purchased frames */}
+            {SHOP_ITEMS.filter(si=>si.type==="frame"&&purchased.includes(si.id)).map(si=>{const selRace=RACES.find(r=>r.id===selectedRace)||RACES[3];const fid=si.frameData.id;
+              return <button key={fid} onClick={()=>setEditFrame(fid)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,padding:"6px 8px",background:editFrame===fid?"rgba(201,168,76,.12)":"rgba(0,0,0,.3)",border:`1px solid ${editFrame===fid?"var(--gold)":"rgba(201,168,76,.1)"}`,cursor:"pointer",minWidth:60}}>
+                <AvatarDisplay race={selRace} frame={fid} size={32} showPulse={false}/>
+                <span style={{fontFamily:"'Cinzel',serif",fontSize:".45rem",color:editFrame===fid?"var(--gold)":"#66BB6A",whiteSpace:"nowrap"}}>{si.frameData.name}</span>
+                <span style={{fontFamily:"'Cinzel',serif",fontSize:".35rem",color:"#66BB6A"}}>🏪</span>
+              </button>;
+            })}
           </div>
         </div>
         {/* Avatar title */}
@@ -2367,6 +2376,10 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
           <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
             {AVATAR_TITLES.map(t=>{const unlocked=_isAvatarUnlocked(t.req,{completed:completed.length,score:totalScore,friends:friends.length});
               return <button key={t.id} onClick={()=>unlocked&&setEditTitle(t.id)} style={{padding:"4px 10px",background:editTitle===t.id?"rgba(201,168,76,.12)":"rgba(0,0,0,.2)",border:`1px solid ${editTitle===t.id?"var(--gold)":"rgba(201,168,76,.1)"}`,color:editTitle===t.id?"var(--gold)":unlocked?"var(--text)":"var(--gm)",fontFamily:"'Cinzel',serif",fontSize:".55rem",cursor:unlocked?"pointer":"not-allowed",opacity:unlocked?1:.35,letterSpacing:".04em"}}>"{t.title}"{!unlocked&&<span style={{fontSize:".4rem",color:"var(--gm)",marginLeft:4}}>{t.req}</span>}</button>;
+            })}
+            {/* Shop-purchased titles */}
+            {SHOP_ITEMS.filter(si=>si.type==="title"&&purchased.includes(si.id)).map(si=>{const tid=si.titleData.id;
+              return <button key={tid} onClick={()=>setEditTitle(tid)} style={{padding:"4px 10px",background:editTitle===tid?"rgba(201,168,76,.12)":"rgba(0,0,0,.2)",border:`1px solid ${editTitle===tid?"var(--gold)":"rgba(102,187,106,.2)"}`,color:editTitle===tid?"var(--gold)":"#66BB6A",fontFamily:"'Cinzel',serif",fontSize:".55rem",cursor:"pointer",letterSpacing:".04em"}}>"{si.titleData.title}" 🏪</button>;
             })}
           </div>
         </div>

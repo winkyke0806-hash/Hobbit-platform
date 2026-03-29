@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { initializeApp, getApps } from "firebase/app";
 import { sfx } from "./hobbit-sounds.jsx";
-import { getDatabase, ref, set, get, onValue, update, push, remove, off, onDisconnect, serverTimestamp } from "firebase/database";
+import { getDatabase, ref, set, get, onValue, update, push, remove, off, onDisconnect, serverTimestamp, query, limitToLast } from "firebase/database";
 
 const FB={apiKey:import.meta.env.VITE_FIREBASE_API_KEY,authDomain:import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,projectId:import.meta.env.VITE_FIREBASE_PROJECT_ID,databaseURL:import.meta.env.VITE_FIREBASE_DATABASE_URL};
 const _app=getApps().length?getApps()[0]:initializeApp(FB);
 const db=getDatabase(_app);
-window.__fbDB={getDatabase:()=>db,ref,set,get,onValue,update,push,remove,off,onDisconnect,serverTimestamp};
+window.__fbDB={getDatabase:()=>db,ref,set,get,onValue,update,push,remove,off,onDisconnect,serverTimestamp,query,limitToLast};
 
 const CSS=`
 @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap');
