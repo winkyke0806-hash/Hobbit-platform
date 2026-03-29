@@ -1397,64 +1397,42 @@ const SHOP_ITEMS=[
   {id:"effect_fire",type:"effect",name:"Tűz Effekt",icon:"🔥",desc:"Tüzes lángok az avatárod körül",cost:900,effectId:"fire"},
 ];
 
-// ── LOOT CRATES ─────────────────────────────────────────────────────────────
-const CRATE_TYPES=[
-  {id:"wood",name:"Fa Láda",icon:"📦",color:"#8B6914",glow:"rgba(139,105,20,.4)",
-    drops:[
-      {type:"pts",min:50,max:200,chance:50,label:"Pont"},
-      {type:"pts",min:200,max:500,chance:20,label:"Sok Pont"},
-      {type:"elo",min:10,max:50,chance:15,label:"ELO Boost"},
-      {type:"crate_upgrade",to:"silver",chance:10,label:"🔄 Ezüst Ládává Fejlődik!"},
-      {type:"title",titleId:"lucky",title:"Szerencsés",chance:5,label:"🏅 \"Szerencsés\" cím"},
-    ]},
-  {id:"silver",name:"Ezüst Láda",icon:"🪙",color:"#A0A0C0",glow:"rgba(160,160,192,.4)",
-    drops:[
-      {type:"pts",min:200,max:600,chance:40,label:"Pont"},
-      {type:"pts",min:600,max:1200,chance:20,label:"Sok Pont"},
-      {type:"elo",min:30,max:100,chance:15,label:"ELO Boost"},
-      {type:"crate_upgrade",to:"gold",chance:10,label:"🔄 Arany Ládává Fejlődik!"},
-      {type:"frame",frameId:"silver_star",frameName:"Ezüst Csillag",chance:10,label:"✨ Ezüst Csillag Keret"},
-      {type:"title",titleId:"treasure_hunter",title:"Kincsvadász",chance:5,label:"🏅 \"Kincsvadász\" cím"},
-    ]},
-  {id:"gold",name:"Arany Láda",icon:"✨",color:"#FFD700",glow:"rgba(255,215,0,.4)",
-    drops:[
-      {type:"pts",min:500,max:1500,chance:35,label:"Pont"},
-      {type:"pts",min:1500,max:3000,chance:15,label:"Rengeteg Pont"},
-      {type:"elo",min:50,max:200,chance:15,label:"ELO Boost"},
-      {type:"crate_upgrade",to:"legendary",chance:8,label:"🔄 Legendás Ládává Fejlődik!"},
-      {type:"frame",frameId:"golden_crown",frameName:"Arany Korona",chance:12,label:"👑 Arany Korona Keret"},
-      {type:"title",titleId:"golden_one",title:"Az Aranyos",chance:8,label:"🏅 \"Az Aranyos\" cím"},
-      {type:"effect",effectId:"golden_sparkle",chance:7,label:"✨ Arany Csillogás Effekt"},
-    ]},
-  {id:"legendary",name:"Legendás Láda",icon:"🔮",color:"#B39DDB",glow:"rgba(179,157,219,.5)",
-    drops:[
-      {type:"pts",min:2000,max:5000,chance:30,label:"Tömérdek Pont"},
-      {type:"elo",min:100,max:500,chance:15,label:"Hatalmas ELO Boost"},
-      {type:"frame",frameId:"legendary_aura",frameName:"Legendás Aura",chance:15,label:"🌟 Legendás Aura Keret"},
-      {type:"title",titleId:"mythic",title:"Mítikus Hős",chance:12,label:"🏅 \"Mítikus Hős\" cím"},
-      {type:"effect",effectId:"legendary_flames",chance:10,label:"🔥 Legendás Lángok Effekt"},
-      {type:"pts",min:5000,max:10000,chance:8,label:"💰 JACKPOT Pont"},
-      {type:"elo",min:500,max:1000,chance:5,label:"⚡ MEGA ELO Boost"},
-      {type:"all_crates",count:3,crateType:"gold",chance:5,label:"📦×3 Három Arany Láda!"},
-    ]},
+// ── STAR DROPS (Brawl Stars style) ──────────────────────────────────────────
+const STAR_RARITIES=[
+  {id:"common",name:"Közönséges",color:"#8B6914",glow:"rgba(139,105,20,.5)",icon:"⭐",upgradeChance:0.25},
+  {id:"rare",name:"Ritka",color:"#4DADE2",glow:"rgba(77,173,226,.5)",icon:"💙",upgradeChance:0.15},
+  {id:"epic",name:"Epikus",color:"#B39DDB",glow:"rgba(179,157,219,.5)",icon:"💜",upgradeChance:0.08},
+  {id:"legendary",name:"Legendás",color:"#FFD700",glow:"rgba(255,215,0,.5)",icon:"🌟",upgradeChance:0},
 ];
-
-const _rollCrate=(crateType)=>{
-  const crate=CRATE_TYPES.find(c=>c.id===crateType);
-  if(!crate)return null;
-  const roll=Math.random()*100;
-  let cumulative=0;
-  for(const drop of crate.drops){
-    cumulative+=drop.chance;
-    if(roll<cumulative){
-      const result={...drop};
-      if(drop.type==="pts")result.amount=Math.floor(drop.min+Math.random()*(drop.max-drop.min));
-      if(drop.type==="elo")result.amount=Math.floor(drop.min+Math.random()*(drop.max-drop.min));
-      return result;
-    }
-  }
-  return crate.drops[0]; // fallback
-};
+const STAR_REWARDS=[
+  // Common pool
+  {rarity:"common",icon:"💰",label:"+100 Pont",type:"pts",amount:100},
+  {rarity:"common",icon:"💰",label:"+200 Pont",type:"pts",amount:200},
+  {rarity:"common",icon:"💰",label:"+350 Pont",type:"pts",amount:350},
+  {rarity:"common",icon:"⚡",label:"+25 ELO",type:"elo",amount:25},
+  {rarity:"common",icon:"⚡",label:"+50 ELO",type:"elo",amount:50},
+  // Rare pool
+  {rarity:"rare",icon:"💰",label:"+500 Pont",type:"pts",amount:500},
+  {rarity:"rare",icon:"💰",label:"+800 Pont",type:"pts",amount:800},
+  {rarity:"rare",icon:"⚡",label:"+100 ELO",type:"elo",amount:100},
+  {rarity:"rare",icon:"✨",label:"Ezüst Csillag Keret",type:"frame",frameId:"silver_star",frameName:"Ezüst Csillag"},
+  {rarity:"rare",icon:"🏅",label:"\"Kincsvadász\" cím",type:"title",titleId:"treasure_hunter",title:"Kincsvadász"},
+  // Epic pool
+  {rarity:"epic",icon:"💰",label:"+1500 Pont",type:"pts",amount:1500},
+  {rarity:"epic",icon:"💰",label:"+2500 Pont",type:"pts",amount:2500},
+  {rarity:"epic",icon:"⚡",label:"+250 ELO",type:"elo",amount:250},
+  {rarity:"epic",icon:"👑",label:"Arany Korona Keret",type:"frame",frameId:"golden_crown",frameName:"Arany Korona"},
+  {rarity:"epic",icon:"🏅",label:"\"Az Aranyos\" cím",type:"title",titleId:"golden_one",title:"Az Aranyos"},
+  {rarity:"epic",icon:"🔥",label:"Arany Csillogás Effekt",type:"effect",effectId:"golden_sparkle"},
+  // Legendary pool
+  {rarity:"legendary",icon:"💰",label:"+5000 Pont",type:"pts",amount:5000},
+  {rarity:"legendary",icon:"💰",label:"+10 000 JACKPOT",type:"pts",amount:10000},
+  {rarity:"legendary",icon:"⚡",label:"+500 ELO",type:"elo",amount:500},
+  {rarity:"legendary",icon:"⚡",label:"+1000 MEGA ELO",type:"elo",amount:1000},
+  {rarity:"legendary",icon:"🌟",label:"Legendás Aura Keret",type:"frame",frameId:"legendary_aura",frameName:"Legendás Aura"},
+  {rarity:"legendary",icon:"🏅",label:"\"Mítikus Hős\" cím",type:"title",titleId:"mythic",title:"Mítikus Hős"},
+  {rarity:"legendary",icon:"🔥",label:"Legendás Lángok",type:"effect",effectId:"legendary_flames"},
+];
 
 // ── VOTE TASKS (weekly featured) ───────────────────────────────────────────
 const VOTE_OPTIONS=[
@@ -2166,48 +2144,80 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
   // ── SHOP STATE ──
   const [purchased,setPurchased]=useState(()=>{try{return JSON.parse(localStorage.getItem("hobbit_shop_purchased")||"[]");}catch{return[];}});
   const [shopMsg,setShopMsg]=useState(null);
-  // ── CRATES STATE ──
-  const [myCrates,setMyCrates]=useState(()=>{try{return JSON.parse(localStorage.getItem("hobbit_crates")||"[]");}catch{return[];}});
-  const [crateOpening,setCrateOpening]=useState(null); // {crateType,phase:"rolling"|"reveal",result}
-  const [crateHistory,setCrateHistory]=useState(()=>{try{return JSON.parse(localStorage.getItem("hobbit_crate_history")||"[]");}catch{return[];}});
-  const saveCrates=(crates)=>{setMyCrates(crates);localStorage.setItem("hobbit_crates",JSON.stringify(crates));};
-  const addCrate=(type)=>{const next=[...myCrates,{id:Date.now()+"_"+Math.random().toString(36).slice(2,6),type,earned:Date.now()}];saveCrates(next);};
-  const openCrate=(crateId)=>{
-    const crate=myCrates.find(c=>c.id===crateId);if(!crate||crateOpening)return;
-    const result=_rollCrate(crate.type);if(!result)return;
-    sfx.dice?.();
-    setCrateOpening({crateType:crate.type,phase:"rolling",result});
-    // Remove from inventory
-    saveCrates(myCrates.filter(c=>c.id!==crateId));
-    // Rolling animation → reveal
-    setTimeout(()=>{
-      setCrateOpening(prev=>prev?{...prev,phase:"reveal"}:null);
-      sfx.achievement?.();
-      // Apply reward
-      if(result.type==="pts"&&result.amount)onAddScore?.("crate_"+Date.now(),result.amount);
-      if(result.type==="elo"&&result.amount){
-        try{const {getDatabase,ref:fbRef,get:fbGet,set:fbSet}=window.__fbDB||{};if(getDatabase){const db=getDatabase();fbGet(fbRef(db,`users/${myName}/profile/elo`)).then(s=>{const cur=s.val()||1000;fbSet(fbRef(db,`users/${myName}/profile/elo`),cur+result.amount);});}}catch(e){}
-      }
-      if(result.type==="crate_upgrade")addCrate(result.to);
-      if(result.type==="all_crates"){for(let i=0;i<(result.count||1);i++)addCrate(result.crateType||"gold");}
-      // Save to history
-      const entry={...result,crateType:crate.type,time:Date.now()};
-      const hist=[entry,...crateHistory].slice(0,20);
-      setCrateHistory(hist);localStorage.setItem("hobbit_crate_history",JSON.stringify(hist));
-    },1800);
+  // ── STAR DROP STATE ──
+  const [starDrops,setStarDrops]=useState(()=>{try{return JSON.parse(localStorage.getItem("hobbit_stardrops")||"[]");}catch{return[];}});
+  const [dropAnim,setDropAnim]=useState(null); // {phase:"idle"|"upgrading"|"spinning"|"reveal", rarity, finalRarity, reward, spinIdx, spinItems}
+  const [dropHistory,setDropHistory]=useState(()=>{try{return JSON.parse(localStorage.getItem("hobbit_drop_history")||"[]");}catch{return[];}});
+  const saveDrops=(d)=>{setStarDrops(d);localStorage.setItem("hobbit_stardrops",JSON.stringify(d));};
+  const addStarDrop=()=>{const next=[...starDrops,{id:Date.now()+"_"+Math.random().toString(36).slice(2,6),earned:Date.now()}];saveDrops(next);return next;};
+
+  const openStarDrop=(dropId)=>{
+    if(dropAnim)return;
+    const drop=starDrops.find(d=>d.id===dropId);if(!drop)return;
+    saveDrops(starDrops.filter(d=>d.id!==dropId));
+    // Determine rarity with upgrade chain
+    let rarity=0; // start common
+    sfx.click?.();
+    setDropAnim({phase:"upgrading",rarity:0,finalRarity:0,reward:null,spinIdx:0,spinItems:[]});
+    // Upgrade chain with delays
+    const tryUpgrade=(currentRarity,delay)=>{
+      setTimeout(()=>{
+        const r=STAR_RARITIES[currentRarity];
+        if(r.upgradeChance>0&&Math.random()<r.upgradeChance){
+          sfx.success?.();
+          const next=currentRarity+1;
+          setDropAnim(prev=>prev?{...prev,rarity:next}:null);
+          tryUpgrade(next,800);
+        }else{
+          // Final rarity determined — start spinning
+          const pool=STAR_REWARDS.filter(r=>r.rarity===STAR_RARITIES[currentRarity].id);
+          const finalReward=pool[Math.floor(Math.random()*pool.length)];
+          // Build spin strip: 20 random items + final reward at position 17
+          const strip=[];
+          for(let i=0;i<20;i++){
+            if(i===17){strip.push(finalReward);}
+            else{const allPool=[...STAR_REWARDS];strip.push(allPool[Math.floor(Math.random()*allPool.length)]);}
+          }
+          sfx.dice?.();
+          setDropAnim(prev=>prev?{...prev,phase:"spinning",finalRarity:currentRarity,reward:finalReward,spinItems:strip,spinIdx:0}:null);
+          // Animate spin
+          let idx=0;const totalTicks=17;
+          const spinTick=()=>{
+            idx++;
+            setDropAnim(prev=>prev?{...prev,spinIdx:idx}:null);
+            if(idx<totalTicks){
+              const delay=80+idx*idx*3; // accelerating slowdown
+              setTimeout(spinTick,delay);
+            }else{
+              // Reveal!
+              setTimeout(()=>{
+                sfx.achievement?.();
+                setDropAnim(prev=>prev?{...prev,phase:"reveal"}:null);
+                // Apply reward
+                if(finalReward.type==="pts")onAddScore?.("stardrop_"+Date.now(),finalReward.amount);
+                if(finalReward.type==="elo"){
+                  try{const {getDatabase,ref:fbRef,get:fbGet,set:fbSet}=window.__fbDB||{};if(getDatabase){const db=getDatabase();fbGet(fbRef(db,`users/${myName}/profile/elo`)).then(s=>{const cur=s.val()||1000;fbSet(fbRef(db,`users/${myName}/profile/elo`),cur+finalReward.amount);});}}catch(e){}
+                }
+                const entry={...finalReward,rarityId:STAR_RARITIES[currentRarity].id,time:Date.now()};
+                const hist=[entry,...dropHistory].slice(0,20);
+                setDropHistory(hist);localStorage.setItem("hobbit_drop_history",JSON.stringify(hist));
+              },500);
+            }
+          };
+          setTimeout(spinTick,200);
+        }
+      },delay);
+    };
+    tryUpgrade(0,600);
   };
-  // Earn crates from task completions (check on mount)
+
+  // Earn star drops from task completions
   useEffect(()=>{
-    const lastCrateCheck=parseInt(localStorage.getItem("hobbit_crate_check")||"0");
-    const tasksSinceLast=completed.filter(t=>!localStorage.getItem(`hobbit_crate_earned_${t}`));
-    if(tasksSinceLast.length>0&&Date.now()-lastCrateCheck>60000){
-      tasksSinceLast.forEach(t=>{
-        const roll=Math.random();
-        const type=roll<0.02?"legendary":roll<0.08?"gold":roll<0.25?"silver":"wood";
-        addCrate(type);localStorage.setItem(`hobbit_crate_earned_${t}`,"1");
-      });
-      localStorage.setItem("hobbit_crate_check",String(Date.now()));
-    }
+    completed.forEach(t=>{
+      if(!localStorage.getItem(`hobbit_sd_${t}`)){
+        addStarDrop();localStorage.setItem(`hobbit_sd_${t}`,"1");
+      }
+    });
   },[]);
 
   const buyItem=(item)=>{
@@ -2271,7 +2281,7 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
     }catch(e){setDuelMsg({ok:false,t:"Hiba történt!"});}
   };
 
-  const TABS2=[{id:"stats",label:"Statok",icon:"📊"},{id:"story",label:"Történet",icon:"📜"},{id:"shop",label:"Bolt",icon:"🏪"},{id:"crates",label:"Ládák",icon:"📦"},{id:"friends",label:"Barátok",icon:"⚔️"},{id:"clan",label:"Klán",icon:"🛡️"},{id:"leaderboard",label:"Ranglétra",icon:"🏆"},{id:"daily",label:"Napi",icon:"☀️"},{id:"vote",label:"Szavazás",icon:"🗳️"},...(activeSeason?[{id:"season",label:activeSeason.name,icon:activeSeason.icon}]:[])];
+  const TABS2=[{id:"stats",label:"Statok",icon:"📊"},{id:"story",label:"Történet",icon:"📜"},{id:"shop",label:"Bolt",icon:"🏪"},{id:"crates",label:"Zsákmány",icon:"⭐"},{id:"friends",label:"Barátok",icon:"⚔️"},{id:"clan",label:"Klán",icon:"🛡️"},{id:"leaderboard",label:"Ranglétra",icon:"🏆"},{id:"daily",label:"Napi",icon:"☀️"},{id:"vote",label:"Szavazás",icon:"🗳️"},...(activeSeason?[{id:"season",label:activeSeason.name,icon:activeSeason.icon}]:[])];
 
   return <div style={{flex:1,display:"flex",flexDirection:"column",minHeight:0,overflowY:"auto"}}>
     {/* Header */}
@@ -2945,63 +2955,85 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
 
     {/* CRATES */}
     {tab==="crates"&&<div style={{padding:"14px 12px",display:"flex",flexDirection:"column",gap:14}}>
-      <div style={{textAlign:"center",padding:"16px",background:"linear-gradient(135deg,rgba(139,105,20,.08),rgba(201,168,76,.04))",border:"1px solid rgba(139,105,20,.25)"}}>
-        <div style={{fontSize:"2rem",marginBottom:6}}>📦</div>
-        <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1rem",color:"var(--gold)",letterSpacing:".1em"}}>Zsákmányládák</div>
-        <div style={{fontFamily:"'EB Garamond',serif",fontSize:".82rem",color:"var(--td)",fontStyle:"italic",marginTop:4}}>Feladatok teljesítéséből ládákat kapsz — nyisd ki és nézd meg mit rejtenek!</div>
-        <div style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:"var(--gm)",marginTop:6,letterSpacing:".08em"}}>{myCrates.length} láda a raktárban</div>
+      <div style={{textAlign:"center",padding:"16px",background:"linear-gradient(135deg,rgba(201,168,76,.06),rgba(179,157,219,.04))",border:"1px solid rgba(201,168,76,.2)"}}>
+        <div style={{fontSize:"2rem",marginBottom:6,animation:"gP 2.5s ease infinite"}}>⭐</div>
+        <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1rem",color:"var(--gold)",letterSpacing:".1em"}}>Csillagzsákmány</div>
+        <div style={{fontFamily:"'EB Garamond',serif",fontSize:".82rem",color:"var(--td)",fontStyle:"italic",marginTop:4}}>Nyisd ki és nézd, milyen ritkaságú lesz — fejlődhet!</div>
+        <div style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:"var(--gm)",marginTop:6,letterSpacing:".08em"}}>{starDrops.length} zsákmány vár rád</div>
       </div>
 
-      {/* Crate opening overlay */}
-      {crateOpening&&<div style={{padding:"20px",background:"rgba(0,0,0,.4)",border:`2px solid ${(CRATE_TYPES.find(c=>c.id===crateOpening.crateType)||CRATE_TYPES[0]).color}`,textAlign:"center",animation:"zoomIn .3s ease"}}>
-        {crateOpening.phase==="rolling"?<>
-          <div style={{fontSize:"3rem",animation:"diceGlowPulse 1s ease infinite"}}>{(CRATE_TYPES.find(c=>c.id===crateOpening.crateType)||CRATE_TYPES[0]).icon}</div>
-          <div style={{fontFamily:"'Cinzel',serif",fontSize:".9rem",color:"var(--gold)",marginTop:8,letterSpacing:".12em",animation:"gP 1s ease infinite"}}>Nyitás...</div>
-        </>:<>
-          <div style={{fontSize:"2.5rem",marginBottom:6,animation:"popIn .5s ease"}}>{crateOpening.result.type==="pts"?"💰":crateOpening.result.type==="elo"?"⚡":crateOpening.result.type==="crate_upgrade"?"🔄":crateOpening.result.type==="title"?"🏅":crateOpening.result.type==="frame"?"✨":crateOpening.result.type==="effect"?"🔥":crateOpening.result.type==="all_crates"?"📦":"🎁"}</div>
-          <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".9rem",color:(CRATE_TYPES.find(c=>c.id===crateOpening.crateType)||CRATE_TYPES[0]).color,letterSpacing:".1em"}}>{crateOpening.result.label}</div>
-          {crateOpening.result.amount&&<div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.3rem",color:"var(--gold)",marginTop:6}}>+{crateOpening.result.amount.toLocaleString()}</div>}
-          <button onClick={()=>setCrateOpening(null)} style={{marginTop:12,padding:"8px 20px",background:"none",border:"1px solid rgba(201,168,76,.3)",color:"var(--gold)",fontFamily:"'Cinzel',serif",fontSize:".65rem",cursor:"pointer",letterSpacing:".1em"}}>Rendben</button>
-        </>}
-      </div>}
-
-      {/* Drop rate info */}
+      {/* Rarity legend */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
-        {CRATE_TYPES.map(ct=><div key={ct.id} style={{padding:"8px 4px",background:`${ct.color}08`,border:`1px solid ${ct.color}33`,borderRadius:4,textAlign:"center"}}>
-          <div style={{fontSize:"1.3rem"}}>{ct.icon}</div>
-          <div style={{fontFamily:"'Cinzel',serif",fontSize:".48rem",color:ct.color,marginTop:2,letterSpacing:".06em"}}>{ct.name}</div>
-          <div style={{fontFamily:"'Cinzel',serif",fontSize:".4rem",color:"var(--gm)",marginTop:2}}>{ct.drops.length} jutalom</div>
+        {STAR_RARITIES.map(r=><div key={r.id} style={{padding:"8px 4px",background:`${r.color}08`,border:`1px solid ${r.color}33`,borderRadius:4,textAlign:"center"}}>
+          <div style={{fontSize:"1.3rem"}}>{r.icon}</div>
+          <div style={{fontFamily:"'Cinzel',serif",fontSize:".45rem",color:r.color,marginTop:2,letterSpacing:".06em"}}>{r.name}</div>
+          {r.upgradeChance>0&&<div style={{fontFamily:"'Cinzel',serif",fontSize:".38rem",color:"var(--gm)",marginTop:1}}>↑ {Math.round(r.upgradeChance*100)}%</div>}
         </div>)}
       </div>
 
-      {/* My crates inventory */}
-      {myCrates.length===0?<div style={{textAlign:"center",padding:"20px",opacity:.5}}>
-        <div style={{fontSize:"2rem",marginBottom:6}}>🔒</div>
-        <div style={{fontFamily:"'Cinzel',serif",fontSize:".72rem",color:"var(--gm)"}}>Nincsenek ládáid. Teljesíts feladatokat, hogy kapj!</div>
+      {/* Star Drop opening animation */}
+      {dropAnim&&<div style={{padding:"24px 16px",background:"rgba(0,0,0,.5)",border:`2px solid ${STAR_RARITIES[dropAnim.rarity].color}`,textAlign:"center",transition:"border-color .5s",borderRadius:6}}>
+        {dropAnim.phase==="upgrading"&&<>
+          <div style={{fontSize:"3.5rem",animation:"diceGlowPulse 1s ease infinite",filter:`drop-shadow(0 0 20px ${STAR_RARITIES[dropAnim.rarity].glow})`,transition:"filter .5s"}}>{STAR_RARITIES[dropAnim.rarity].icon}</div>
+          <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1rem",color:STAR_RARITIES[dropAnim.rarity].color,marginTop:10,letterSpacing:".12em",transition:"color .5s"}}>{STAR_RARITIES[dropAnim.rarity].name}</div>
+          <div style={{fontFamily:"'Cinzel',serif",fontSize:".6rem",color:"var(--gm)",marginTop:6,animation:"gP 1.5s ease infinite"}}>Fejlődik...?</div>
+          {/* Rarity dots */}
+          <div style={{display:"flex",justifyContent:"center",gap:8,marginTop:10}}>
+            {STAR_RARITIES.map((r,i)=><div key={r.id} style={{width:12,height:12,borderRadius:"50%",background:i<=dropAnim.rarity?r.color:"rgba(255,255,255,.06)",border:`1.5px solid ${i<=dropAnim.rarity?r.color:"rgba(255,255,255,.1)"}`,boxShadow:i===dropAnim.rarity?`0 0 12px ${r.glow}`:"none",transition:"all .5s"}}/>)}
+          </div>
+        </>}
+        {dropAnim.phase==="spinning"&&<>
+          <div style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",color:STAR_RARITIES[dropAnim.finalRarity].color,letterSpacing:".14em",textTransform:"uppercase",marginBottom:10}}>{STAR_RARITIES[dropAnim.finalRarity].name} Zsákmány</div>
+          {/* Spinner strip */}
+          <div style={{overflow:"hidden",height:70,position:"relative",border:`1px solid ${STAR_RARITIES[dropAnim.finalRarity].color}33`,background:"rgba(0,0,0,.4)",borderRadius:4}}>
+            {/* Center indicator */}
+            <div style={{position:"absolute",top:0,bottom:0,left:"50%",transform:"translateX(-50%)",width:60,borderLeft:`2px solid ${STAR_RARITIES[dropAnim.finalRarity].color}`,borderRight:`2px solid ${STAR_RARITIES[dropAnim.finalRarity].color}`,zIndex:2,background:`${STAR_RARITIES[dropAnim.finalRarity].color}08`}}/>
+            <div style={{display:"flex",alignItems:"center",height:"100%",transition:"transform .15s ease-out",transform:`translateX(calc(50% - 30px - ${dropAnim.spinIdx*60}px))`}}>
+              {dropAnim.spinItems.map((item,i)=>{
+                const isCenter=i===dropAnim.spinIdx;
+                const rr=STAR_RARITIES.find(r=>r.id===item.rarity)||STAR_RARITIES[0];
+                return <div key={i} style={{minWidth:60,height:60,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,opacity:isCenter?1:.4,transform:isCenter?"scale(1.1)":"scale(.85)",transition:"all .15s"}}>
+                  <span style={{fontSize:"1.5rem",filter:isCenter?`drop-shadow(0 0 8px ${rr.glow})`:"none"}}>{item.icon}</span>
+                  <span style={{fontFamily:"'Cinzel',serif",fontSize:".35rem",color:rr.color,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:55}}>{item.label.slice(0,12)}</span>
+                </div>;
+              })}
+            </div>
+          </div>
+        </>}
+        {dropAnim.phase==="reveal"&&dropAnim.reward&&<>
+          <div style={{fontSize:"3rem",marginBottom:8,animation:"popIn .5s ease"}}>{dropAnim.reward.icon}</div>
+          <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1rem",color:STAR_RARITIES[dropAnim.finalRarity].color,letterSpacing:".1em"}}>{dropAnim.reward.label}</div>
+          {dropAnim.reward.amount&&<div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.5rem",color:"var(--gold)",marginTop:6,animation:"gP 2s ease infinite"}}>+{dropAnim.reward.amount.toLocaleString()}</div>}
+          <div style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",color:STAR_RARITIES[dropAnim.finalRarity].color,marginTop:6,padding:"3px 12px",background:`${STAR_RARITIES[dropAnim.finalRarity].color}12`,border:`1px solid ${STAR_RARITIES[dropAnim.finalRarity].color}44`,display:"inline-block",borderRadius:12}}>{STAR_RARITIES[dropAnim.finalRarity].icon} {STAR_RARITIES[dropAnim.finalRarity].name}</div>
+          <div><button onClick={()=>setDropAnim(null)} style={{marginTop:14,padding:"8px 24px",background:"none",border:"1px solid rgba(201,168,76,.3)",color:"var(--gold)",fontFamily:"'Cinzel',serif",fontSize:".65rem",cursor:"pointer",letterSpacing:".1em"}}>Rendben</button></div>
+        </>}
+      </div>}
+
+      {/* Star drops inventory */}
+      {starDrops.length===0&&!dropAnim?<div style={{textAlign:"center",padding:"24px",opacity:.5}}>
+        <div style={{fontSize:"2rem",marginBottom:8}}>🔒</div>
+        <div style={{fontFamily:"'Cinzel',serif",fontSize:".72rem",color:"var(--gm)"}}>Nincs zsákmányod. Teljesíts feladatokat!</div>
       </div>
       :<div style={{display:"flex",flexDirection:"column",gap:8}}>
-        <div style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",letterSpacing:".14em",color:"var(--gm)",textTransform:"uppercase"}}>— Raktár ({myCrates.length}) —</div>
-        {myCrates.map(c=>{
-          const ct=CRATE_TYPES.find(t=>t.id===c.type)||CRATE_TYPES[0];
-          return <div key={c.id} style={{padding:"12px 14px",background:`${ct.color}06`,border:`1px solid ${ct.color}33`,borderRadius:4,display:"flex",alignItems:"center",gap:12,transition:"all .3s"}}>
-            <span style={{fontSize:"1.8rem",filter:`drop-shadow(0 0 8px ${ct.glow})`,flexShrink:0}}>{ct.icon}</span>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{fontFamily:"'Cinzel',serif",fontSize:".75rem",color:ct.color}}>{ct.name}</div>
-              <div style={{fontFamily:"'Cinzel',serif",fontSize:".45rem",color:"var(--gm)",marginTop:2}}>Kapva: {new Date(c.earned).toLocaleDateString("hu-HU")}</div>
-            </div>
-            <button onClick={()=>openCrate(c.id)} disabled={!!crateOpening} style={{padding:"8px 16px",background:`${ct.color}15`,border:`1px solid ${ct.color}66`,color:ct.color,fontFamily:"'Cinzel',serif",fontSize:".65rem",letterSpacing:".1em",cursor:crateOpening?"default":"pointer",textTransform:"uppercase",borderRadius:3,opacity:crateOpening?.5:1}}>Nyitás 🔓</button>
-          </div>;
-        })}
+        {!dropAnim&&<div style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",letterSpacing:".14em",color:"var(--gm)",textTransform:"uppercase"}}>— {starDrops.length} zsákmány —</div>}
+        {!dropAnim&&starDrops.map(d=><div key={d.id} style={{padding:"14px 16px",background:"linear-gradient(135deg,rgba(201,168,76,.06),rgba(179,157,219,.03))",border:"1px solid rgba(201,168,76,.2)",borderRadius:4,display:"flex",alignItems:"center",gap:14,cursor:"pointer",transition:"all .3s"}} onClick={()=>openStarDrop(d.id)}>
+          <div style={{fontSize:"2.2rem",animation:"gP 3s ease infinite",filter:"drop-shadow(0 0 12px rgba(201,168,76,.4))"}}>⭐</div>
+          <div style={{flex:1}}>
+            <div style={{fontFamily:"'Cinzel',serif",fontSize:".78rem",color:"var(--gold)"}}>Csillagzsákmány</div>
+            <div style={{fontFamily:"'Cinzel',serif",fontSize:".45rem",color:"var(--gm)",marginTop:2}}>Kapva: {new Date(d.earned).toLocaleDateString("hu-HU")}</div>
+          </div>
+          <div style={{padding:"8px 16px",background:"rgba(201,168,76,.1)",border:"1px solid rgba(201,168,76,.35)",color:"var(--gold)",fontFamily:"'Cinzel',serif",fontSize:".65rem",letterSpacing:".1em",borderRadius:3}}>Nyitás ⭐</div>
+        </div>)}
       </div>}
 
       {/* History */}
-      {crateHistory.length>0&&<div>
+      {dropHistory.length>0&&!dropAnim&&<div>
         <div style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",letterSpacing:".14em",color:"var(--gm)",textTransform:"uppercase",marginBottom:6}}>— Előzmények —</div>
-        {crateHistory.slice(0,10).map((h,i)=>{
-          const ct=CRATE_TYPES.find(t=>t.id===h.crateType)||CRATE_TYPES[0];
+        {dropHistory.slice(0,10).map((h,i)=>{
+          const rr=STAR_RARITIES.find(r=>r.id===h.rarityId)||STAR_RARITIES[0];
           return <div key={i} style={{padding:"6px 10px",display:"flex",alignItems:"center",gap:8,borderBottom:"1px solid rgba(201,168,76,.06)"}}>
-            <span style={{fontSize:".9rem"}}>{ct.icon}</span>
-            <span style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",color:ct.color,flex:1}}>{h.label}{h.amount?` (+${h.amount.toLocaleString()})`:""}</span>
+            <span style={{fontSize:".9rem"}}>{rr.icon}</span>
+            <span style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",color:rr.color,flex:1}}>{h.label}{h.amount?` (+${h.amount.toLocaleString()})`:""}</span>
             <span style={{fontFamily:"'Cinzel',serif",fontSize:".42rem",color:"var(--gm)"}}>{new Date(h.time).toLocaleDateString("hu-HU")}</span>
           </div>;
         })}
