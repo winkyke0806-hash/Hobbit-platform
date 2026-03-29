@@ -1,4 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { initializeApp, getApps } from "firebase/app";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged, signOut } from "firebase/auth";
+import { getDatabase, ref, set, get, update } from "firebase/database";
+
+const FB={apiKey:import.meta.env.VITE_FIREBASE_API_KEY,authDomain:import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,projectId:import.meta.env.VITE_FIREBASE_PROJECT_ID,databaseURL:import.meta.env.VITE_FIREBASE_DATABASE_URL};
+const _app=getApps().length?getApps()[0]:initializeApp(FB);
+const auth=getAuth(_app);
+const fbDb=getDatabase(_app);
+
+export {auth,fbDb};
 
 // ─────────────────────────────────────────────────────────────────────────────
 const RACES = [
@@ -140,8 +150,8 @@ function RuneStrip({offset=0}) {
 }
 
 // ─── ROOT APP ─────────────────────────────────────────────────────────────────
-export default function HobbitApp() {
-  const [screen, setScreen] = useState("auth"); // auth | welcome | tasks
+export default function HobbitApp({onLogin}) {
+  const [screen, setScreen] = useState("auth"); // auth | welcome
   const [user, setUser]     = useState(null);
   const canvasRef = useRef(null);
   useParticles(canvasRef);
@@ -150,6 +160,10 @@ export default function HobbitApp() {
     setUser(u);
     setScreen("welcome");
   }, []);
+
+  const handleEnter = useCallback(() => {
+    if (onLogin) onLogin();
+  }, [onLogin]);
 
   return (
     <>
@@ -161,8 +175,7 @@ export default function HobbitApp() {
         <div className="amb amb1"/><div className="amb amb2"/>
 
         {screen === "auth"    && <AuthScreen    onSuccess={handleAuth}/>}
-        {screen === "welcome" && <WelcomeScreen user={user} onEnter={() => setScreen("tasks")}/>}
-        {screen === "tasks"   && <TasksScreen   user={user}/>}
+        {screen === "welcome" && <WelcomeScreen user={user} onEnter={handleEnter}/>}
       </div>
     </>
   );
@@ -218,19 +231,41 @@ function LoginForm({onSuccess, onSwitch}) {
 
   const upd = (k,v) => { setForm(f=>({...f,[k]:v})); setErrors(e=>({...e,[k]:""})); setGE(""); };
 
-  const submit = () => {
+  const [resetSent, setResetSent] = useState(false);
+
+  const submit = async () => {
     const e = {};
     if (!form.email.match(/^[^@]+@[^@]+\.[^@]+$/)) e.email    = "Érvényes email cím szükséges!";
     if (!form.password)                              e.password = "Add meg a jelszavad!";
     if (Object.keys(e).length) { setErrors(e); return; }
     setLoading(true);
-    setTimeout(() => {
-      const users = JSON.parse(localStorage.getItem("hobbit_users")||"[]");
-      const user  = users.find(u => u.email===form.email && u.password===form.password);
-      if (!user) { setGE("Hibás email vagy jelszó — próbáld újra, kalandor!"); setLoading(false); return; }
+    try {
+      const cred = await signInWithEmailAndPassword(auth, form.email, form.password);
+      const uid = cred.user.uid;
+      const mapSnap = await get(ref(fbDb, `auth_map/${uid}`));
+      const mapData = mapSnap.val();
+      if (!mapData?.adventureName) { setGE("Profil nem található — regisztrálj újra!"); setLoading(false); return; }
+      const profSnap = await get(ref(fbDb, `users/${mapData.adventureName}/profile`));
+      const profile = profSnap.val() || {};
+      const user = { ...profile, adventureName: mapData.adventureName, uid };
       localStorage.setItem("hobbit_current", JSON.stringify(user));
       onSuccess(user);
-    }, 700);
+    } catch (err) {
+      const msg = err.code === "auth/invalid-credential" || err.code === "auth/wrong-password" || err.code === "auth/user-not-found"
+        ? "Hibás email vagy jelszó — próbáld újra, kalandor!"
+        : err.code === "auth/too-many-requests"
+        ? "Túl sok próbálkozás — várj egy kicsit!"
+        : "Hiba történt a bejelentkezéskor.";
+      setGE(msg); setLoading(false);
+    }
+  };
+
+  const handleReset = async () => {
+    if (!form.email.match(/^[^@]+@[^@]+\.[^@]+$/)) { setErrors({email:"Add meg az email címed a jelszó-visszaállításhoz!"}); return; }
+    try {
+      await sendPasswordResetEmail(auth, form.email);
+      setResetSent(true);
+    } catch { setGE("Nem sikerült elküldeni a visszaállító emailt."); }
   };
 
   return (
@@ -260,10 +295,11 @@ function LoginForm({onSuccess, onSwitch}) {
         {globalErr && <Err msg={globalErr}/>}
 
         <div style={{textAlign:"right"}}>
-          <button style={{background:"none",border:"none",color:"var(--text-dim)",cursor:"pointer",fontFamily:"'Cinzel',serif",fontSize:"0.67rem",letterSpacing:"0.08em",textDecoration:"underline",textUnderlineOffset:"3px"}}>
+          <button onClick={handleReset} style={{background:"none",border:"none",color:"var(--text-dim)",cursor:"pointer",fontFamily:"'Cinzel',serif",fontSize:"0.67rem",letterSpacing:"0.08em",textDecoration:"underline",textUnderlineOffset:"3px"}}>
             Elfelejtett jelszó?
           </button>
         </div>
+        {resetSent && <div style={{padding:"8px 12px",background:"rgba(67,160,71,.12)",border:"1px solid rgba(102,187,106,.3)",color:"#A5D6A7",fontSize:".79rem",fontStyle:"italic",fontFamily:"'EB Garamond',serif",marginTop:4}}>Jelszó-visszaállító email elküldve! Nézd meg a postafiókodat.</div>}
       </div>
 
       <button className={`btn-submit${loading?" btn-loading":""}`} onClick={submit} disabled={loading}>
@@ -313,16 +349,36 @@ function RegisterForm({onSuccess, onSwitch}) {
   };
   const back = () => { setAnimDir(-1); setStep(s=>s-1); setAnimKey(k=>k+1); };
 
-  const finish = () => {
-    const users = JSON.parse(localStorage.getItem("hobbit_users")||"[]");
-    if(users.find(u=>u.email===form.email)){
-      setGE("Ez az email cím már foglalt — talán már kalandoz valaki?");
-      setStep(0); return;
+  const [finishing, setFinishing] = useState(false);
+
+  const finish = async () => {
+    setFinishing(true);
+    try {
+      // Ellenőrizzük, hogy a kalandornév szabad-e
+      const nameSnap = await get(ref(fbDb, `users/${form.adventureName}/profile`));
+      if (nameSnap.exists()) {
+        setGE("Ez a kalandornév már foglalt — válassz másikat!");
+        setStep(0); setFinishing(false); return;
+      }
+      // Firebase Auth account létrehozás
+      const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
+      const uid = cred.user.uid;
+      const user = { adventureName: form.adventureName, realName: form.realName, email: form.email, race: form.race, joinedAt: new Date().toISOString(), score: 0, elo: 1000, uid };
+      // Profil mentése RTDB-be
+      await set(ref(fbDb, `users/${form.adventureName}/profile`), user);
+      // UID → adventureName mapping
+      await set(ref(fbDb, `auth_map/${uid}`), { adventureName: form.adventureName });
+      // localStorage backward compat
+      localStorage.setItem("hobbit_current", JSON.stringify(user));
+      onSuccess(user);
+    } catch (err) {
+      const msg = err.code === "auth/email-already-in-use"
+        ? "Ez az email cím már foglalt — talán már kalandoz valaki?"
+        : err.code === "auth/weak-password"
+        ? "A jelszó túl gyenge — legalább 6 karakter kell!"
+        : "Hiba történt a regisztráció során.";
+      setGE(msg); setStep(0); setFinishing(false);
     }
-    const user = {id:Date.now(),adventureName:form.adventureName,realName:form.realName,email:form.email,password:form.password,race:form.race,joinedAt:new Date().toISOString(),score:0,completedTasks:[]};
-    localStorage.setItem("hobbit_users",JSON.stringify([...users,user]));
-    localStorage.setItem("hobbit_current",JSON.stringify(user));
-    onSuccess(user);
   };
 
   const race = RACES.find(r=>r.id===form.race);
@@ -445,10 +501,8 @@ function RegisterForm({onSuccess, onSwitch}) {
       {/* Nav */}
       <div className="form-foot">
         {step>0 ? <button className="btn-back" onClick={back}>← Vissza</button> : <span/>}
-        <button className="btn-submit" style={{flex:"unset",padding:"11px 22px"}} onClick={next}>
-          {step===0&&"Faj Választása →"}
-          {step===1&&"Összefoglalás →"}
-          {step===2&&"⚔️  Kaland Kezdete"}
+        <button className={`btn-submit${finishing?" btn-loading":""}`} style={{flex:"unset",padding:"11px 22px"}} onClick={next} disabled={finishing}>
+          {finishing?"✦ Fiók létrehozás... ✦":step===0?"Faj Választása →":step===1?"Összefoglalás →":"⚔️  Kaland Kezdete"}
         </button>
       </div>
 

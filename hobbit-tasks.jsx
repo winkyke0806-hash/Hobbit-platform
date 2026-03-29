@@ -1,5 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, Component } from "react";
+import { auth } from "./hobbit-app.jsx";
+import { signOut } from "firebase/auth";
 import BoardGame from "./hobbit-game.jsx";
+
+class ErrorCatch extends Component{constructor(p){super(p);this.state={err:null};}static getDerivedStateFromError(e){return{err:e};}componentDidCatch(e,i){console.error("ProfileTab crash:",e,i);}render(){if(this.state.err)return <div style={{padding:20,color:"#EF9A9A",fontFamily:"monospace",fontSize:".8rem",whiteSpace:"pre-wrap"}}><b>Hiba a profilban:</b><br/>{this.state.err.toString()}<br/>{this.state.err.stack}</div>;return this.props.children;}}
 
 // ── CONSTANTS ──────────────────────────────────────────────────────────────────
 const RACES = [
@@ -634,8 +638,10 @@ function AdventureMap({user,completed,scores,onSelect}){
         {/* Subtle grid */}
         {[20,40,60,80].map(v=><g key={`gr${v}`}><line x1={v} y1="2" x2={v} y2="98" stroke="rgba(201,168,76,.018)" strokeWidth=".06"/><line x1="2" y1={v} x2="98" y2={v} stroke="rgba(201,168,76,.018)" strokeWidth=".06"/></g>)}
 
-        {/* ─── TERRAIN: Shire — nodes:(10,62)(18,72)(12,80) ─── */}
-        <g>
+        {/* ─── TERRAIN (with 16:9 stretch compensation) ─── */}
+
+        {/* Shire — rolling green hills */}
+        <g transform="translate(13,0) scale(0.5625,1) translate(-13,0)">
           <ellipse cx="14" cy="82" rx="16" ry="7" fill="#2a5a16" opacity=".7"/>
           <ellipse cx="6" cy="76" rx="10" ry="5" fill="#347a20" opacity=".6"/>
           <ellipse cx="22" cy="80" rx="9" ry="4" fill="#2e6a1a" opacity=".55"/>
@@ -645,55 +651,60 @@ function AdventureMap({user,completed,scores,onSelect}){
           <ellipse cx="16" cy="66" rx="5" ry="2.5" fill="#4a9a34" opacity=".3"/>
         </g>
 
-        {/* ─── TERRAIN: Rivendell — nodes:(28,32)(36,40)(30,48) ─── */}
-        <g>
-          <path d="M24 54 L26 30 L28 36 L30 26 L32 32 L34 22 L36 28 L38 34 L40 54" fill="#1a3038" opacity=".55" stroke="#3a7a8a" strokeWidth=".3" strokeOpacity=".4"/>
-          <path d="M26 52 L28 32 L30 28 L32 34 L34 24 L36 30 L38 34 L40 52" fill="#1a3842" opacity=".35"/>
-          <line x1="30" y1="27" x2="30.2" y2="50" stroke="#5ac0e0" strokeWidth=".5" strokeDasharray=".6,.8" opacity=".28"/>
-          <line x1="36" y1="25" x2="35.8" y2="47" stroke="#5ac0e0" strokeWidth=".35" strokeDasharray=".5,.7" opacity=".2"/>
-          <path d="M27 40 Q32 33 37 40" fill="none" stroke="#4a9aba" strokeWidth=".3" opacity=".4"/>
-          <line x1="33" y1="24" x2="33" y2="18" stroke="#4a9aba" strokeWidth=".2" opacity=".35"/>
-          <circle cx="33" cy="17.5" r=".4" fill="#4a9aba" opacity=".3"/>
+        {/* Rivendell — gentle valley with soft cliffs */}
+        <g transform="translate(32,0) scale(0.5625,1) translate(-32,0)">
+          <path d="M18 55 Q22 48 24 38 Q26 32 28 36 Q30 40 32 35 Q34 30 36 36 Q38 40 40 38 Q42 32 46 55" fill="#1a3038" opacity=".35" stroke="#3a7a8a" strokeWidth=".2" strokeOpacity=".25"/>
+          <path d="M22 54 Q26 42 29 36 Q32 42 35 36 Q38 42 42 54" fill="#1a3842" opacity=".2"/>
+          <ellipse cx="32" cy="50" rx="12" ry="5" fill="#1a2a30" opacity=".15"/>
+          <line x1="29" y1="36" x2="29.5" y2="52" stroke="#5ac0e0" strokeWidth=".4" strokeDasharray=".5,.7" opacity=".2"/>
+          <line x1="36" y1="35" x2="35.5" y2="50" stroke="#5ac0e0" strokeWidth=".3" strokeDasharray=".4,.6" opacity=".15"/>
+          <path d="M26 44 Q32 38 38 44" fill="none" stroke="#4a9aba" strokeWidth=".25" opacity=".2"/>
         </g>
 
-        {/* ─── TERRAIN: Mirkwood — nodes:(50,52)(56,60)(52,68) ─── */}
-        <g>
-          <ellipse cx="53" cy="68" rx="12" ry="7" fill="#0a1a05" opacity=".35"/>
-          {[[44,70],[46,66],[48,62],[50,58],[52,54],[54,51],[56,54],[58,58],[60,62],[62,66],[64,70]].map(([x,y],i)=>
-            <polygon key={`tb${i}`} points={`${x},${y+6} ${x+.6},${y-4.5} ${x+1.2},${y+6}`} fill="#1a4a10" opacity=".6"/>
+        {/* Mirkwood — dark dense forest with rounded canopies */}
+        <g transform="translate(53,0) scale(0.5625,1) translate(-53,0)">
+          {/* Back layer — dark large canopies */}
+          {[[44,66],[48,62],[52,58],[56,56],[60,58],[64,62],[67,66]].map(([x,y],i)=>
+            <ellipse key={`cb${i}`} cx={x} cy={y} rx="4" ry="3.5" fill="#1a3a10" opacity=".5"/>
           )}
-          {[[45,71],[47,67],[49,63],[51,58],[53,54],[55,52],[57,55],[59,59],[61,63],[63,68]].map(([x,y],i)=>
-            <polygon key={`tf${i}`} points={`${x},${y+5} ${x+.9},${y-5.5} ${x+1.8},${y+5}`} fill="#2a6a18" opacity=".65"/>
+          {/* Middle layer — medium canopies */}
+          {[[46,64],[50,60],[53,57],[57,58],[61,60],[65,64]].map(([x,y],i)=>
+            <ellipse key={`cm${i}`} cx={x} cy={y} rx="3.5" ry="3" fill="#1a4a12" opacity=".45"/>
           )}
-          {[[46,70],[49,64],[52,58],[55,54],[58,57],[61,63]].map(([x,y],i)=>
-            <polygon key={`tt${i}`} points={`${x+.3},${y+4} ${x+.7},${y-3.5} ${x+1.1},${y+4}`} fill="#3a8a22" opacity=".4"/>
+          {/* Front layer — lighter small canopies */}
+          {[[45,67],[49,63],[53,59],[57,60],[62,63],[66,67]].map(([x,y],i)=>
+            <ellipse key={`cf${i}`} cx={x} cy={y} rx="3" ry="2.5" fill="#2a5a18" opacity=".4"/>
+          )}
+          {/* Tiny trunks peeking through */}
+          {[[47,68],[51,64],[55,60],[59,62],[63,66]].map(([x,y],i)=>
+            <line key={`tr${i}`} x1={x} y1={y} x2={x} y2={y+3} stroke="#1a2a08" strokeWidth=".4" opacity=".3"/>
           )}
         </g>
 
-        {/* ─── TERRAIN: Ködös Hegyek — nodes:(70,24)(77,32)(73,40) ─── */}
-        <g>
-          <path d="M62 46 L65 32 L68 38 L71 26 L74 18 L77 24 L80 30 L83 46" fill="#3a3430" opacity=".6" stroke="#5a5244" strokeWidth=".15" strokeOpacity=".35"/>
-          <path d="M64 46 L67 30 L70 36 L73 22 L76 14 L79 22 L82 32 L85 46" fill="#4a4238" opacity=".55" stroke="#6a5e50" strokeWidth=".12" strokeOpacity=".25"/>
-          <path d="M66 46 L69 32 L72 24 L75 16 L78 26 L80 36 L82 46" fill="#5a5040" opacity=".5"/>
-          <path d="M76 14 L74.5 20 L77.5 20 Z" fill="#c8c4bc" opacity=".3"/>
-          <path d="M74 18 L73 22 L75 22 Z" fill="#c0bcb4" opacity=".22"/>
-          <path d="M71 26 L70 30 L72 30 Z" fill="#b8b4ac" opacity=".15"/>
-          <ellipse cx="75" cy="22" rx="4" ry=".8" fill="#8a8078" opacity=".1"/>
-          <ellipse cx="80" cy="28" rx="3" ry=".6" fill="#8a8078" opacity=".07"/>
+        {/* Ködös Hegyek — mountain range with curved silhouettes */}
+        <g transform="translate(73,0) scale(0.5625,1) translate(-73,0)">
+          <path d="M56 48 Q60 38 63 30 Q65 24 68 28 Q70 22 73 14 Q76 8 78 14 Q80 20 82 28 Q84 24 87 30 Q90 38 94 48" fill="#3a3430" opacity=".5" stroke="#5a5244" strokeWidth=".12" strokeOpacity=".2"/>
+          <path d="M58 48 Q63 34 67 26 Q70 20 73 16 Q76 10 79 20 Q82 26 87 34 Q92 48 92 48" fill="#4a4238" opacity=".4"/>
+          <path d="M62 48 Q67 32 71 22 Q74 14 77 22 Q80 32 85 48" fill="#5a5040" opacity=".3"/>
+          {/* Snow caps */}
+          <path d="M76 8 Q74 14 73 16 Q76 15 78 14 Z" fill="#c8c4bc" opacity=".25"/>
+          <path d="M73 14 Q72 18 71 20 Q73 19 74 18 Z" fill="#c0bcb4" opacity=".18"/>
+          <ellipse cx="75" cy="22" rx="5" ry="1" fill="#8a8078" opacity=".08"/>
         </g>
 
-        {/* ─── TERRAIN: Erebor — nodes:(86,42)(92,52)(88,60) ─── */}
-        <g>
-          <ellipse cx="89" cy="64" rx="9" ry="3.5" fill="#2a1a0a" opacity=".35"/>
-          <path d="M80 66 L83 50 L85.5 54 L87 44 L89 30 L91 44 L93 54 L95 50 L98 66" fill="#3a2a18" opacity=".6" stroke="#5a4228" strokeWidth=".15" strokeOpacity=".3"/>
-          <path d="M82 66 L85 52 L87 44 L89 32 L91 44 L93 52 L96 66" fill="#4a3820" opacity=".5"/>
-          <path d="M85 66 L87.5 46 L89 34 L90.5 46 L93 66" fill="#5a4828" opacity=".35"/>
-          <path d="M89 30 L87.5 36 L90.5 36 Z" fill="#c8c4bc" opacity=".25"/>
-          <path d="M87 60 Q89 54 91 60" fill="none" stroke="#ba8a3a" strokeWidth=".35" opacity=".4"/>
-          <line x1="89" y1="55" x2="89" y2="60" stroke="#ba8a3a" strokeWidth=".15" opacity=".3"/>
-          <ellipse cx="89" cy="55" rx="3.5" ry="3.5" fill="url(#eGlow)"/>
-          {[[87,57],[90,56],[88,53],[91,55],[86.5,59],[89,52]].map(([x,y],i)=>
-            <circle key={`sp${i}`} cx={x} cy={y} r=".2" fill="#f0c848" opacity=".18" className="map-sparkle"/>
+        {/* Erebor — lonely mountain with dragon fire */}
+        <g transform="translate(89,0) scale(0.5625,1) translate(-89,0)">
+          <ellipse cx="89" cy="66" rx="14" ry="4" fill="#2a1a0a" opacity=".3"/>
+          <path d="M76 68 Q80 52 83 44 Q86 36 89 26 Q92 36 95 44 Q98 52 102 68" fill="#3a2a18" opacity=".5" stroke="#5a4228" strokeWidth=".12" strokeOpacity=".2"/>
+          <path d="M78 68 Q83 48 86 38 Q89 28 92 38 Q95 48 100 68" fill="#4a3820" opacity=".4"/>
+          <path d="M82 68 Q85 46 89 30 Q93 46 96 68" fill="#5a4828" opacity=".3"/>
+          {/* Snow cap */}
+          <path d="M89 26 Q87 32 86 34 Q89 33 92 34 Z" fill="#c8c4bc" opacity=".2"/>
+          {/* Dragon glow */}
+          <path d="M85 60 Q89 52 93 60" fill="none" stroke="#ba8a3a" strokeWidth=".3" opacity=".35"/>
+          <ellipse cx="89" cy="54" rx="5" ry="4" fill="url(#eGlow)"/>
+          {[[86,56],[91,55],[87.5,52],[92,53],[85,59],[89,50]].map(([x,y],i)=>
+            <circle key={`sp${i}`} cx={x} cy={y} r=".25" fill="#f0c848" opacity=".2" className="map-sparkle"/>
           )}
         </g>
 
@@ -828,17 +839,17 @@ function MemoryGame(){
     }
   };
   const reset=()=>{setCards([...CARD_EMOJIS,...CARD_EMOJIS].sort(()=>Math.random()-.5).map((e,i)=>({id:i,emoji:e,flipped:false,matched:false})));setSel([]);setMoves(0);setLocked(false);setWon(false);};
-  return <div style={{padding:"16px 14px",display:"flex",flexDirection:"column",gap:14}}>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+  return <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",height:"100%",overflow:"hidden"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
       <div style={{fontFamily:"'Cinzel',serif",fontSize:".7rem",letterSpacing:".1em",color:"var(--gm)",textTransform:"uppercase"}}>🃏 Tolkien Memória</div>
       <div style={{display:"flex",gap:12,alignItems:"center"}}>
         <span style={{fontFamily:"'Cinzel',serif",fontSize:".7rem",color:"var(--gold)"}}>{moves} lépés</span>
         <button onClick={reset} style={{background:"none",border:"1px solid rgba(201,168,76,.2)",color:"var(--gm)",padding:"4px 10px",fontFamily:"'Cinzel',serif",fontSize:".65rem",cursor:"pointer",letterSpacing:".1em"}}>Újra</button>
       </div>
     </div>
-    {won&&<div style={{textAlign:"center",padding:"12px",background:"rgba(201,168,76,.08)",border:"1px solid rgba(201,168,76,.3)",fontFamily:"'Cinzel',serif",fontSize:".85rem",color:"var(--gold)",animation:"fadeIn .4s ease"}}>✨ Gratulálok! {moves} lépésből megoldottad! ✨</div>}
-    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
-      {cards.map(c=><div key={c.id} onClick={()=>flip(c.id)} style={{aspectRatio:"1",border:`1.5px solid ${c.matched?"rgba(102,187,106,.5)":c.flipped?"var(--gold)":"rgba(201,168,76,.18)"}`,background:c.matched?"rgba(102,187,106,.08)":c.flipped?"rgba(201,168,76,.1)":"rgba(255,255,255,.02)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.6rem",cursor:c.matched||c.flipped?"default":"pointer",transition:"all .2s",transform:c.flipped||c.matched?"scale(1)":"scale(.97)",boxShadow:c.matched?"0 0 12px rgba(102,187,106,.2)":"none"}}>{c.flipped||c.matched?c.emoji:"🔮"}</div>)}
+    {won&&<div style={{textAlign:"center",padding:"12px",background:"rgba(201,168,76,.08)",border:"1px solid rgba(201,168,76,.3)",fontFamily:"'Cinzel',serif",fontSize:".85rem",color:"var(--gold)",animation:"fadeIn .4s ease",marginBottom:8}}>✨ Gratulálok! {moves} lépésből megoldottad! ✨</div>}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gridTemplateRows:"repeat(4,1fr)",gap:8,flex:1,minHeight:0}}>
+      {cards.map(c=><div key={c.id} className={c.flipped&&!c.matched?"card-flip":""} onClick={()=>flip(c.id)} style={{border:`1.5px solid ${c.matched?"rgba(102,187,106,.5)":c.flipped?"var(--gold)":"rgba(201,168,76,.18)"}`,background:c.matched?"rgba(102,187,106,.08)":c.flipped?"rgba(201,168,76,.1)":"rgba(255,255,255,.02)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"2rem",cursor:c.matched||c.flipped?"default":"pointer",transition:"border .3s,background .3s,box-shadow .3s,transform .25s cubic-bezier(.22,1,.36,1)",transform:c.matched?"scale(1.03)":c.flipped?"scale(1)":"scale(.97)",boxShadow:c.matched?"0 0 16px rgba(102,187,106,.25)":c.flipped?"0 0 10px rgba(201,168,76,.15)":"none"}}>{c.flipped||c.matched?c.emoji:"🔮"}</div>)}
     </div>
   </div>;
 }
@@ -882,53 +893,73 @@ function ReactionGame(){
 function WordSearch(){
   const words=["BILBO","GANDALF","SMAUG","THORIN","GOLLUM","EREBOR"];
   const SIZE=10;
+  const dirs=[[0,1],[1,0],[0,-1],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]];
   const [grid]=useState(()=>{
     const g=Array.from({length:SIZE},()=>Array(SIZE).fill(""));
     const alpha="ABCDEFGHIJKLMNOPRSTUVWXYZ";
-    words.forEach(w=>{
+    const shuffled=[...words].sort(()=>Math.random()-.5);
+    shuffled.forEach(w=>{
       let placed=false;let tries=0;
-      while(!placed&&tries<100){tries++;
-        const horiz=Math.random()>.5;const r=Math.floor(Math.random()*(horiz?SIZE:SIZE-w.length));const c=Math.floor(Math.random()*(horiz?SIZE-w.length:SIZE));
-        let ok=true;w.split("").forEach((l,i)=>{const rr=horiz?r:r+i;const cc=horiz?c+i:c;if(g[rr][cc]&&g[rr][cc]!==l)ok=false;});
-        if(ok){w.split("").forEach((l,i)=>{const rr=horiz?r:r+i;const cc=horiz?c+i:c;g[rr][cc]=l;});placed=true;}
+      while(!placed&&tries<200){tries++;
+        const [dr,dc]=dirs[Math.floor(Math.random()*dirs.length)];
+        const r=Math.floor(Math.random()*SIZE);const c=Math.floor(Math.random()*SIZE);
+        const er=r+dr*(w.length-1);const ec=c+dc*(w.length-1);
+        if(er<0||er>=SIZE||ec<0||ec>=SIZE)continue;
+        let ok=true;
+        for(let i=0;i<w.length;i++){const rr=r+dr*i;const cc=c+dc*i;if(g[rr][cc]&&g[rr][cc]!==w[i]){ok=false;break;}}
+        if(ok){for(let i=0;i<w.length;i++){g[r+dr*i][c+dc*i]=w[i];}placed=true;}
       }
     });
     for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++)if(!g[r][c])g[r][c]=alpha[Math.floor(Math.random()*alpha.length)];
     return g;
   });
-  const [sel,setSel]=useState([]);const [found,setFound]=useState([]);const [start,setStart2]=useState(null);
+  const [sel,setSel]=useState([]);const [foundWords,setFoundWords]=useState([]);const [foundCells,setFoundCells]=useState(new Set());const [start,setStart2]=useState(null);
   const key=(r,c)=>`${r},${c}`;
   const selSet=new Set(sel.map(([r,c])=>key(r,c)));
-  const foundSet=new Set(found.flatMap(f=>f));
+  const snapLine=(sr,sc,er,ec)=>{
+    const dr=er-sr,dc=ec-sc;
+    const adr=Math.abs(dr),adc=Math.abs(dc);
+    let sdr,sdc,len;
+    if(adr===0&&adc===0){return [[sr,sc]];}
+    if(adr>=adc*2){sdr=dr>0?1:-1;sdc=0;len=adr;}
+    else if(adc>=adr*2){sdr=0;sdc=dc>0?1:-1;len=adc;}
+    else{sdr=dr>0?1:-1;sdc=dc>0?1:-1;len=Math.max(adr,adc);}
+    const cells=[];for(let i=0;i<=len;i++)cells.push([sr+sdr*i,sc+sdc*i]);
+    return cells;
+  };
   const tdown=(r,c)=>setStart2([r,c]);
-  const tmove=(r,c)=>{if(!start)return;const dr=c-start[1],dc=r-start[0];const len=Math.max(Math.abs(dr),Math.abs(dc));const cells=[];for(let i=0;i<=len;i++){const rr=start[0]+Math.round(i/len*(dc||0));const cc=start[1]+Math.round(i/len*(dr||0));cells.push([rr,cc]);}setSel(cells);};
+  const tmove=(r,c)=>{if(!start)return;setSel(snapLine(start[0],start[1],r,c));};
   const tup=()=>{
-    if(sel.length<2){setSel([]);setStart2(null);return;}
-    const w=sel.map(([r,c])=>grid[r][c]).join("");const wr=sel.map(([r,c])=>grid[r][c]).reverse().join("");
-    const fw=words.find(fw=>fw===w||fw===wr);
-    if(fw&&!found.some(f=>f[0]===key(sel[0][0],sel[0][1]))){setFound(f=>[...f,sel.map(([r,c])=>key(r,c))]);}
+    if(sel.length>=2){
+      const w=sel.map(([r,c])=>grid[r]?.[c]||"").join("");const wr=[...sel].reverse().map(([r,c])=>grid[r]?.[c]||"").join("");
+      const fw=words.find(fw=>fw===w||fw===wr);
+      if(fw&&!foundWords.includes(fw)){
+        setFoundWords(f=>[...f,fw]);
+        setFoundCells(prev=>{const next=new Set(prev);sel.forEach(([r,c])=>next.add(key(r,c)));return next;});
+      }
+    }
     setSel([]);setStart2(null);
   };
-  return <div style={{padding:"16px 14px",display:"flex",flexDirection:"column",gap:12,userSelect:"none"}}>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+  return <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",height:"100%",overflow:"hidden",userSelect:"none"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
       <div style={{fontFamily:"'Cinzel',serif",fontSize:".7rem",letterSpacing:".1em",color:"var(--gm)",textTransform:"uppercase"}}>🔍 Tolkien Szókereső</div>
-      <div style={{fontFamily:"'Cinzel',serif",fontSize:".7rem",color:"var(--gold)"}}>{found.length}/{words.length} megtalálva</div>
+      <div style={{fontFamily:"'Cinzel',serif",fontSize:".7rem",color:"var(--gold)"}}>{foundWords.length}/{words.length} megtalálva</div>
     </div>
-    <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-      {words.map(w=><span key={w} style={{fontFamily:"'Cinzel',serif",fontSize:".65rem",padding:"2px 8px",border:"1px solid rgba(201,168,76,.2)",color:found.length>words.indexOf(w)?"rgba(102,187,106,.8)":"var(--gm)",textDecoration:found.length>words.indexOf(w)?"line-through":"none",letterSpacing:".06em"}}>{w}</span>)}
+    <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:8}}>
+      {words.map(w=><span key={w} style={{fontFamily:"'Cinzel',serif",fontSize:".65rem",padding:"2px 8px",border:"1px solid rgba(201,168,76,.2)",color:foundWords.includes(w)?"rgba(102,187,106,.8)":"var(--gm)",textDecoration:foundWords.includes(w)?"line-through":"none",letterSpacing:".06em"}}>{w}</span>)}
     </div>
-    <div style={{display:"grid",gridTemplateColumns:`repeat(${SIZE},1fr)`,gap:2,touchAction:"none"}}
+    <div style={{display:"grid",gridTemplateColumns:`repeat(${SIZE},1fr)`,gridTemplateRows:`repeat(${SIZE},1fr)`,gap:2,touchAction:"none",flex:1,minHeight:0}}
       onMouseLeave={tup}>
       {grid.map((row,r)=>row.map((cell,c)=>{
-        const k=key(r,c);const isSel=selSet.has(k);const isFound=foundSet.has(k);
+        const k=key(r,c);const isSel=selSet.has(k);const isFound=foundCells.has(k);
         return <div key={k}
           onMouseDown={()=>tdown(r,c)} onMouseMove={()=>tmove(r,c)} onMouseUp={tup}
-          style={{aspectRatio:"1",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Cinzel',serif",fontSize:"clamp(.6rem,1.5vw,.8rem)",background:isFound?"rgba(102,187,106,.12)":isSel?"rgba(201,168,76,.2)":"transparent",color:isFound?"#66BB6A":isSel?"var(--gold)":"var(--text)",border:"1px solid rgba(201,168,76,.06)",cursor:"default",transition:"all .1s",fontWeight:isFound||isSel?"700":"400"}}>
+          style={{display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Cinzel',serif",fontSize:"clamp(.7rem,2vw,1rem)",background:isFound?"rgba(102,187,106,.12)":isSel?"rgba(201,168,76,.2)":"transparent",color:isFound?"#66BB6A":isSel?"var(--gold)":"var(--text)",border:"1px solid rgba(201,168,76,.06)",cursor:"default",transition:"all .1s",fontWeight:isFound||isSel?"700":"400"}}>
           {cell}
         </div>;
       }))}
     </div>
-    {found.length===words.length&&<div style={{textAlign:"center",padding:"10px",background:"rgba(201,168,76,.08)",border:"1px solid rgba(201,168,76,.3)",fontFamily:"'Cinzel',serif",fontSize:".82rem",color:"var(--gold)",animation:"fadeIn .4s"}}> ✨ Minden szót megtaláltál! ✨</div>}
+    {foundWords.length===words.length&&<div style={{textAlign:"center",padding:"10px",background:"rgba(201,168,76,.08)",border:"1px solid rgba(201,168,76,.3)",fontFamily:"'Cinzel',serif",fontSize:".82rem",color:"var(--gold)",animation:"fadeIn .4s",marginTop:8}}>✨ Minden szót megtaláltál! ✨</div>}
   </div>;
 }
 
@@ -945,12 +976,12 @@ function MiniGamesTab(){
   const swipeEnd=(e)=>{if(touchRef.current===null)return;const end=e.changedTouches?e.changedTouches[0].clientX:e.clientX;const diff=touchRef.current-end;if(Math.abs(diff)>50){if(diff>0&&carouselIdx<games.length-1)setCarouselIdx(i=>i+1);else if(diff<0&&carouselIdx>0)setCarouselIdx(i=>i-1);}touchRef.current=null;};
   if(activeGame){
     const GameComp=activeGame==="memory"?MemoryGame:activeGame==="reaction"?ReactionGame:WordSearch;
-    return <div style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}>
+    return <div className="gentle-pop" style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}>
       <div style={{display:"flex",alignItems:"center",padding:"10px 14px",borderBottom:"1px solid rgba(201,168,76,.12)",flexShrink:0,gap:10}}>
-        <button onClick={()=>setActiveGame(null)} style={{background:"none",border:"1px solid rgba(201,168,76,.2)",color:"var(--gm)",padding:"4px 10px",fontFamily:"'Cinzel',serif",fontSize:".65rem",cursor:"pointer"}}>← Vissza</button>
+        <button onClick={()=>setActiveGame(null)} style={{background:"none",border:"1px solid rgba(201,168,76,.2)",color:"var(--gm)",padding:"4px 10px",fontFamily:"'Cinzel',serif",fontSize:".65rem",cursor:"pointer",transition:"all .2s"}} onMouseEnter={e=>{e.target.style.borderColor="var(--gold)";e.target.style.color="var(--gold)";}} onMouseLeave={e=>{e.target.style.borderColor="rgba(201,168,76,.2)";e.target.style.color="var(--gm)";}}>← Vissza</button>
         <div style={{fontFamily:"'Cinzel',serif",fontSize:".72rem",color:"var(--gold)",letterSpacing:".08em"}}>{games.find(g=>g.id===activeGame)?.icon} {games.find(g=>g.id===activeGame)?.label}</div>
       </div>
-      <div style={{flex:1,overflowY:"auto"}}><GameComp/></div>
+      <div style={{flex:1,overflow:"hidden"}}><GameComp/></div>
     </div>;
   }
   return <div style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}>
@@ -960,7 +991,8 @@ function MiniGamesTab(){
       <div style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",color:"var(--gm)",letterSpacing:".12em",marginTop:3,textTransform:"uppercase"}}>— Válassz játékot —</div>
     </div>
     {/* Carousel */}
-    <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:"10px 0",overflow:"hidden"}} onTouchStart={swipeStart} onTouchEnd={swipeEnd} onMouseDown={(e)=>{touchRef.current=e.clientX;}} onMouseUp={(e)=>{if(touchRef.current===null)return;const diff=touchRef.current-e.clientX;if(Math.abs(diff)>50){if(diff>0&&carouselIdx<games.length-1)setCarouselIdx(i=>i+1);else if(diff<0&&carouselIdx>0)setCarouselIdx(i=>i-1);}touchRef.current=null;}}>
+    <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:"10px 0",overflow:"hidden",position:"relative"}} onTouchStart={swipeStart} onTouchEnd={swipeEnd}>
+      {carouselIdx>0&&<button onClick={()=>setCarouselIdx(i=>i-1)} style={{position:"absolute",left:"15%",zIndex:5,width:40,height:40,borderRadius:"50%",background:"rgba(201,168,76,.08)",border:"1px solid rgba(201,168,76,.25)",color:"var(--gold)",fontSize:"1.1rem",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}>←</button>}
       <div style={{display:"flex",transition:"transform .4s cubic-bezier(.22,1,.36,1)",transform:`translateX(calc(${-carouselIdx} * (min(260px,70vw) + 16px)))`,paddingLeft:"calc(50% - min(130px,35vw))",gap:16}}>
         {games.map((g,i)=>{
           const isActive=i===carouselIdx;
@@ -972,6 +1004,7 @@ function MiniGamesTab(){
           </div>;
         })}
       </div>
+      {carouselIdx<games.length-1&&<button onClick={()=>setCarouselIdx(i=>i+1)} style={{position:"absolute",right:"15%",zIndex:5,width:40,height:40,borderRadius:"50%",background:"rgba(201,168,76,.08)",border:"1px solid rgba(201,168,76,.25)",color:"var(--gold)",fontSize:"1.1rem",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}>→</button>}
     </div>
     {/* Dots */}
     <div style={{display:"flex",justifyContent:"center",gap:8,padding:"10px 0 16px",flexShrink:0}}>
@@ -983,8 +1016,57 @@ function MiniGamesTab(){
 // ── PROFILE TAB ────────────────────────────────────────────────────────────────
 const RANK_TIERS=[{min:2500,label:"🏆 Középföld Mestere",color:"#FFD700"},{min:1800,label:"⚔️ Legendás Hős",color:"#C9A84C"},{min:1000,label:"🛡️ Tapasztalt Vitéz",color:"#A0A0C0"},{min:500,label:"📜 Kalandor",color:"#A0522D"},{min:100,label:"🌱 Újonc",color:"#6B8C3E"},{min:0,label:"🚶 Vándor",color:"#5A5040"}];
 const getRank=(score)=>RANK_TIERS.find(r=>score>=r.min)||RANK_TIERS[RANK_TIERS.length-1];
-const FAKE_PLAYERS=[{name:"Legolas",race:"elf",score:2840,tasks:15},{name:"Gandalf",race:"wizard",score:2650,tasks:15},{name:"Thorin",race:"dwarf",score:2100,tasks:13},{name:"Aragorn",race:"human",score:1950,tasks:12},{name:"Frodo",race:"hobbit",score:1600,tasks:11},{name:"Bilbo",race:"hobbit",score:1400,tasks:10},{name:"Gimli",race:"dwarf",score:1100,tasks:9},{name:"Elrond",race:"elf",score:800,tasks:7}];
+const ELO_TIERS=[{min:2000,label:"Középföld Bajnoka",icon:"👑",color:"#FFD700"},{min:1600,label:"Legendás Harcos",icon:"⚔️",color:"#C9A84C"},{min:1200,label:"Tapasztalt Kalandor",icon:"🛡️",color:"#A0A0C0"},{min:800,label:"Újonc Vándor",icon:"🗡️",color:"#A0522D"},{min:0,label:"Kezdő",icon:"🌱",color:"#6B8C3E"}];
+const getEloRank=(elo)=>ELO_TIERS.find(r=>elo>=r.min)||ELO_TIERS[ELO_TIERS.length-1];
 const DAILY_CHALLENGES=[{icon:"⚔️",task:"Teljesíts 2 feladatot ma",pts:50},{icon:"💍",task:"Szerezz 200 pontot egyetlen feladatban",pts:80},{icon:"🧙",task:"Próbáld ki a Rúna Dekódolót",pts:60},{icon:"🗺️",task:"Teljesítsd a Térkép 3 feladatát",pts:100},{icon:"⏱️",task:"Teljesíts egy feladatot gyorsan",pts:70}];
+
+function LeaderboardPanel({leaderboard,myName}){
+  const [mode,setMode]=useState("score"); // "score" or "elo"
+  const sorted=mode==="elo"?[...leaderboard].sort((a,b)=>(b.elo||1000)-(a.elo||1000)):leaderboard;
+  return <div role="list" aria-label="Ranglétra" style={{padding:"14px 12px",display:"flex",flexDirection:"column",gap:8}}>
+    <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".72rem",letterSpacing:".1em",color:"var(--gold)",textAlign:"center",marginBottom:2}}>Középfölde Ranglétrája</div>
+    {/* Toggle */}
+    <div style={{display:"flex",gap:0,alignSelf:"center",border:"1px solid rgba(201,168,76,.25)",borderRadius:3,overflow:"hidden",marginBottom:4}}>
+      <button onClick={()=>setMode("score")} style={{padding:"6px 16px",background:mode==="score"?"rgba(201,168,76,.15)":"transparent",border:"none",borderRight:"1px solid rgba(201,168,76,.15)",color:mode==="score"?"var(--gold)":"var(--gm)",fontFamily:"'Cinzel',serif",fontSize:".6rem",letterSpacing:".08em",cursor:"pointer",transition:"all .2s"}}>🏆 Pontok</button>
+      <button onClick={()=>setMode("elo")} style={{padding:"6px 16px",background:mode==="elo"?"rgba(122,74,187,.15)":"transparent",border:"none",color:mode==="elo"?"#B39DDB":"var(--gm)",fontFamily:"'Cinzel',serif",fontSize:".6rem",letterSpacing:".08em",cursor:"pointer",transition:"all .2s"}}>⚔️ Ranked ELO</button>
+    </div>
+    {sorted.map((p,i)=>{
+      const pr=RACES.find(r=>r.id===p.race)||RACES[3];
+      const er=getEloRank(p.elo||1000);
+      const medal=i===0?"🥇":i===1?"🥈":i===2?"🥉":null;
+      const medalBg=i===0?"rgba(255,215,0,.06)":i===1?"rgba(192,192,192,.05)":i===2?"rgba(205,127,50,.05)":"transparent";
+      const medalBorder=i===0?"rgba(255,215,0,.25)":i===1?"rgba(192,192,192,.2)":i===2?"rgba(205,127,50,.2)":p.isMe?"rgba(201,168,76,.3)":"rgba(201,168,76,.07)";
+      const isElo=mode==="elo";
+      return <div key={p.name+i} style={{display:"flex",alignItems:"center",gap:9,padding:"9px 10px",background:p.isMe?`linear-gradient(90deg,${isElo?"rgba(122,74,187,.08)":pr.color+"12"},rgba(201,168,76,.07))`:medalBg||(i%2===1?"rgba(255,255,255,.015)":"transparent"),border:`1px solid ${medalBorder}`,boxShadow:p.isMe?`0 0 14px ${isElo?"rgba(122,74,187,.15)":pr.color+"22"}`:"none",position:p.isMe?"sticky":"static",bottom:p.isMe?0:"auto",zIndex:p.isMe?2:1}}>
+        <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".75rem",color:i<3?"var(--gold)":"var(--gm)",minWidth:22,textAlign:"center"}}>{medal||`${i+1}.`}</div>
+        <div style={{width:32,height:32,borderRadius:"50%",border:`1.5px solid ${pr.color}`,background:`radial-gradient(circle,${pr.color}22,transparent)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:".9rem",flexShrink:0}}>{pr.icon}</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontFamily:"'Cinzel',serif",fontSize:".72rem",color:p.isMe?"var(--gold)":"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}{p.isMe?" (Te)":""}</div>
+          {isElo
+            ?<div style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:er.color}}>{er.icon} {er.label}</div>
+            :<div style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:getRank(p.score).color}}>{getRank(p.score).label}</div>
+          }
+        </div>
+        {isElo
+          ?<div style={{textAlign:"right",flexShrink:0}}>
+            <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".85rem",color:er.color}}>{p.elo||1000}</div>
+            <div style={{fontFamily:"'Cinzel',serif",fontSize:".42rem",color:"var(--gm)",letterSpacing:".08em"}}>ELO</div>
+          </div>
+          :<>
+            <div style={{textAlign:"center",flexShrink:0,marginRight:6}}>
+              <div style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",color:er.color}}>{er.icon} {p.elo||1000}</div>
+              <div style={{fontFamily:"'Cinzel',serif",fontSize:".42rem",color:"var(--gm)",letterSpacing:".08em"}}>ELO</div>
+            </div>
+            <div style={{textAlign:"right",flexShrink:0}}>
+              <div style={{fontFamily:"'Cinzel',serif",fontSize:".72rem",color:"var(--gold)"}}>{p.score}pt</div>
+              <div style={{fontFamily:"'Cinzel',serif",fontSize:".48rem",color:"var(--gm)"}}>{p.tasks}/{TASKS.length} ✓</div>
+            </div>
+          </>
+        }
+      </div>;
+    })}
+  </div>;
+}
 
 function BarChart({data,color}){
   const max=Math.max(...data.map(d=>d.val),1);
@@ -1001,8 +1083,11 @@ function ProfileTab({user,completed,scores,onInviteFriend}){
   const totalScore=Object.values(scores).reduce((a,b)=>a+b,0);
   const pct=Math.round((completed.length/TASKS.length)*100);
   const rank=getRank(totalScore);
+  const [myElo,setMyElo]=useState(1000);
+  const eloRank=getEloRank(myElo);
   const [tab,setTab]=useState("stats");
   const [friends,setFriends]=useState([]);
+  const [allUsers,setAllUsers]=useState([]);
   const [pendingIn,setPendingIn]=useState([]); // bejövő kérelmek
   const [search,setSearch]=useState("");
   const [searchMsg,setSearchMsg]=useState(null);
@@ -1014,12 +1099,54 @@ function ProfileTab({user,completed,scores,onInviteFriend}){
   const [dailyDone,setDailyDone]=useState(()=>JSON.parse(localStorage.getItem("hobbit_daily_"+todayKey)||"[]"));
   const dailyChallenge=DAILY_CHALLENGES[new Date().getDay()%DAILY_CHALLENGES.length];
   const myName=user?.adventureName;
+  // Chat state
+  const [chatWith,setChatWith]=useState(null);
+  const [messages,setMessages]=useState([]);
+  const [msgInput,setMsgInput]=useState("");
+  const chatEndRef=useRef(null);
   // Countdown timer
   const [countdown,setCountdown]=useState("");
   useEffect(()=>{const tick=()=>{const now=new Date();const tom=new Date(now);tom.setHours(24,0,0,0);const diff=tom-now;const h=String(Math.floor(diff/3600000)).padStart(2,"0");const m=String(Math.floor((diff%3600000)/60000)).padStart(2,"0");const s=String(Math.floor((diff%60000)/1000)).padStart(2,"0");setCountdown(`${h}:${m}:${s}`);};tick();const id=setInterval(tick,1000);return()=>clearInterval(id);},[]);
 
   // Firebase imports
   const { initializeApp:fbInit, getApps } = window.__fbModules||{};
+  const [onlineStatus,setOnlineStatus]=useState({});
+
+  // Online presence system
+  useEffect(()=>{
+    if(!myName) return;
+    try{
+      const {getDatabase,ref:fbRef,set,onDisconnect:fbOnDisc}=window.__fbDB||{};
+      if(!getDatabase) return;
+      const db=getDatabase();
+      const statusRef=fbRef(db,`status/${myName}`);
+      set(statusRef,{online:true,lastSeen:Date.now()});
+      try{if(fbOnDisc)fbOnDisc(statusRef).set({online:false,lastSeen:Date.now()});}catch(e2){}
+      // Heartbeat every 60s
+      const hb=setInterval(()=>{try{set(statusRef,{online:true,lastSeen:Date.now()});}catch(e3){}},60000);
+      return ()=>{clearInterval(hb);try{set(statusRef,{online:false,lastSeen:Date.now()});}catch(e4){}};
+    }catch(e){}
+  },[myName]);
+
+  // Listen to friends' online status
+  useEffect(()=>{
+    if(!friends.length) return;
+    try{
+      const {getDatabase,ref:fbRef,onValue,off}=window.__fbDB||{};
+      if(!getDatabase) return;
+      const db=getDatabase();
+      const unsubs=[];
+      friends.forEach(f=>{
+        const sr=fbRef(db,`status/${f.name}`);
+        onValue(sr,(snap)=>{
+          const d=snap.val();
+          setOnlineStatus(prev=>({...prev,[f.name]:d}));
+        });
+        unsubs.push(sr);
+      });
+      return ()=>unsubs.forEach(r=>off(r));
+    }catch(e){}
+  },[friends.map(f=>f?.name||"").join(",")]);
 
   // Sync user profile to Firebase & listen to friends/requests
   useEffect(()=>{
@@ -1028,8 +1155,11 @@ function ProfileTab({user,completed,scores,onInviteFriend}){
       const {getDatabase,ref:fbRef,set,onValue,off,update,remove}=window.__fbDB||{};
       if(!getDatabase) return;
       const db=getDatabase();
-      // Register user profile
-      set(fbRef(db,`users/${myName}/profile`),{name:myName,race:user?.race||"human",score:totalScore,updated:Date.now()});
+      // Register user profile — update preserves elo field
+      update(fbRef(db,`users/${myName}/profile`),{name:myName,race:user?.race||"human",score:totalScore,tasks:completed.length,updated:Date.now()});
+      // Listen to own ELO
+      const eloRef=fbRef(db,`users/${myName}/profile/elo`);
+      onValue(eloRef,(snap)=>{const v=snap.val();if(typeof v==="number")setMyElo(v);});
       // Listen to friends
       const friendsRef=fbRef(db,`users/${myName}/friends`);
       onValue(friendsRef,(snap)=>{
@@ -1042,9 +1172,16 @@ function ProfileTab({user,completed,scores,onInviteFriend}){
         const data=snap.val()||{};
         setPendingIn(Object.values(data));
       });
-      return ()=>{off(friendsRef);off(reqRef);};
+      // Listen to all users for leaderboard
+      const usersRef=fbRef(db,"users");
+      onValue(usersRef,(snap)=>{
+        const data=snap.val()||{};
+        const users=Object.values(data).map(u=>u.profile).filter(p=>p&&p.name);
+        setAllUsers(users);
+      });
+      return ()=>{off(friendsRef);off(reqRef);off(usersRef);off(eloRef);};
     } catch(e){}
-  },[myName,totalScore]);
+  },[myName,totalScore,completed.length]);
 
   const achivs=[
     {icon:"🗡️",name:"Első Vér",desc:"1 feladat",done:completed.length>=1,progress:{current:Math.min(completed.length,1),target:1}},
@@ -1121,9 +1258,46 @@ function ProfileTab({user,completed,scores,onInviteFriend}){
     } catch(e){}
   };
 
+  // Chat Firebase listener
+  useEffect(()=>{
+    if(!chatWith||!myName) return;
+    try{
+      const {getDatabase,ref:fbRef,onValue,off}=window.__fbDB||{};
+      if(!getDatabase) return;
+      const db=getDatabase();
+      const chatId=[myName,chatWith].sort().join("_");
+      const chatRef=fbRef(db,`chats/${chatId}/messages`);
+      onValue(chatRef,(snap)=>{
+        const data=snap.val()||{};
+        const msgs=Object.values(data).sort((a,b)=>a.ts-b.ts);
+        setMessages(msgs);
+      });
+      return ()=>off(chatRef);
+    }catch(e){}
+  },[chatWith,myName]);
+
+  useEffect(()=>{chatEndRef.current?.scrollIntoView({behavior:"smooth"});},[messages]);
+
+  const sendMessage=()=>{
+    const text=msgInput.trim();
+    if(!text||!chatWith||!myName) return;
+    try{
+      const {getDatabase,ref:fbRef,push,set}=window.__fbDB||{};
+      if(!getDatabase) return;
+      const db=getDatabase();
+      const chatId=[myName,chatWith].sort().join("_");
+      const msgRef=push(fbRef(db,`chats/${chatId}/messages`));
+      set(msgRef,{from:myName,text,ts:Date.now()});
+      setMsgInput("");
+    }catch(e){}
+  };
+
   const claimDaily=()=>{const next=[...dailyDone,dailyChallenge.task];setDailyDone(next);localStorage.setItem("hobbit_daily_"+todayKey,JSON.stringify(next));};
   const isDailyClaimed=dailyDone.includes(dailyChallenge.task);
-  const leaderboard=[...FAKE_PLAYERS,{name:myName||"Te",race:user?.race||"human",score:totalScore,tasks:completed.length,isMe:true}].sort((a,b)=>b.score-a.score);
+  const leaderboard=(allUsers.length>0
+    ?allUsers.map(u=>({name:u.name,race:u.race||"human",score:u.score||0,tasks:u.tasks||0,elo:u.elo||1000,isMe:u.name===myName}))
+    :[{name:myName||"Te",race:user?.race||"human",score:totalScore,tasks:completed.length,elo:myElo,isMe:true}]
+  ).sort((a,b)=>b.score-a.score);
 
   const TABS2=[{id:"stats",label:"Statok",icon:"📊"},{id:"friends",label:"Barátok",icon:"⚔️"},{id:"leaderboard",label:"Ranglétra",icon:"🏆"},{id:"daily",label:"Napi",icon:"☀️"}];
 
@@ -1137,17 +1311,21 @@ function ProfileTab({user,completed,scores,onInviteFriend}){
         </div>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"clamp(.85rem,2.5vw,1.1rem)",color:"var(--gold)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user?.adventureName||"Ismeretlen"}</div>
-          <div style={{display:"flex",alignItems:"center",gap:6,marginTop:2}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginTop:2,flexWrap:"wrap"}}>
             <span style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",color:race.color,letterSpacing:".06em",textTransform:"uppercase"}}>{race.id}</span>
             <span style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:rank.color,background:`${rank.color}15`,border:`1px solid ${rank.color}33`,borderRadius:12,padding:"1px 8px",letterSpacing:".05em",whiteSpace:"nowrap"}}>{rank.label}</span>
+            <span style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:eloRank.color,background:`${eloRank.color}15`,border:`1px solid ${eloRank.color}33`,borderRadius:12,padding:"1px 8px",letterSpacing:".05em",whiteSpace:"nowrap"}}>{eloRank.icon} {myElo} ELO</span>
           </div>
           <div style={{fontStyle:"italic",fontSize:".75rem",color:bio?"var(--td)":"rgba(106,90,64,.4)",marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{bio||"Mesélj magadról..."}</div>
           <div style={{marginTop:6,height:4,background:"rgba(255,255,255,.05)",borderRadius:2,overflow:"hidden"}}><div style={{height:"100%",width:`${pct}%`,background:`linear-gradient(90deg,${race.color},var(--gold))`,transition:"width 1s",borderRadius:2}}/></div>
           <div style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:"var(--gm)",marginTop:2,letterSpacing:".06em"}}>{completed.length}/{TASKS.length} feladat · {pct}%</div>
         </div>
-        <div style={{textAlign:"center",flexShrink:0}}>
-          <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.2rem",color:"var(--gold)"}}>{totalScore}</div>
-          <div style={{fontFamily:"'Cinzel',serif",fontSize:".48rem",color:"var(--gm)",letterSpacing:".1em"}}>PONT</div>
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,flexShrink:0}}>
+          <div style={{textAlign:"center"}}>
+            <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.2rem",color:"var(--gold)"}}>{totalScore}</div>
+            <div style={{fontFamily:"'Cinzel',serif",fontSize:".48rem",color:"var(--gm)",letterSpacing:".1em"}}>PONT</div>
+          </div>
+          <button onClick={()=>{signOut(auth).catch(()=>{});localStorage.removeItem("hobbit_current");window.location.reload();}} style={{padding:"3px 10px",background:"rgba(229,57,53,.08)",border:"1px solid rgba(229,57,53,.25)",color:"#EF9A9A",fontFamily:"'Cinzel',serif",fontSize:".48rem",letterSpacing:".06em",cursor:"pointer",borderRadius:3,whiteSpace:"nowrap"}}>Kilépés</button>
         </div>
       </div>
     </div>
@@ -1192,6 +1370,20 @@ function ProfileTab({user,completed,scores,onInviteFriend}){
           <span style={{fontSize:"1.3rem"}}>{s.icon}</span>
           <div><div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1rem",color:s.color}}>{s.val}</div><div style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:"var(--gm)",letterSpacing:".06em",textTransform:"uppercase"}}>{s.label}</div></div>
         </div>)}
+      </div>
+      {/* Ranked ELO card */}
+      <div style={{padding:"14px",background:`linear-gradient(135deg,${eloRank.color}08,rgba(0,0,0,.2))`,border:`1px solid ${eloRank.color}33`,display:"flex",alignItems:"center",gap:14}}>
+        <div style={{fontSize:"2rem",filter:`drop-shadow(0 0 10px ${eloRank.color}66)`}}>{eloRank.icon}</div>
+        <div style={{flex:1}}>
+          <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".9rem",color:eloRank.color}}>{eloRank.label}</div>
+          <div style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:"var(--gm)",letterSpacing:".1em",textTransform:"uppercase",marginTop:2}}>Ranked ELO</div>
+          {/* ELO progress bar to next tier */}
+          {(()=>{try{const idx=ELO_TIERS.findIndex(r=>(myElo||0)>=r.min);if(idx<0)return null;const nextTier=idx>0?ELO_TIERS[idx-1]:null;const curMin=ELO_TIERS[idx].min;if(!nextTier)return <div style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:eloRank.color,marginTop:4}}>Maximális rang!</div>;const pctElo=Math.min(((myElo-curMin)/(nextTier.min-curMin))*100,100);return <div><div style={{marginTop:5,height:3,background:"rgba(255,255,255,.06)",borderRadius:2,overflow:"hidden"}}><div style={{height:"100%",width:`${pctElo}%`,background:`linear-gradient(90deg,${eloRank.color},${nextTier.color})`,transition:"width .6s",borderRadius:2}}/></div><div style={{fontFamily:"'Cinzel',serif",fontSize:".48rem",color:"var(--gm)",marginTop:2}}>{myElo}/{nextTier.min} a következő ranghoz</div></div>;}catch(e){return null;}})()}
+        </div>
+        <div style={{textAlign:"center",flexShrink:0}}>
+          <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.4rem",color:eloRank.color}}>{myElo}</div>
+          <div style={{fontFamily:"'Cinzel',serif",fontSize:".48rem",color:"var(--gm)",letterSpacing:".1em"}}>ELO</div>
+        </div>
       </div>
       <div style={{padding:"12px",background:"rgba(0,0,0,.2)",border:"1px solid rgba(201,168,76,.08)"}}>
         <div style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",letterSpacing:".14em",color:"var(--gm)",textTransform:"uppercase",marginBottom:10}}>— Pontok feladatonként —</div>
@@ -1244,47 +1436,69 @@ function ProfileTab({user,completed,scores,onInviteFriend}){
         ?<div style={{textAlign:"center",padding:"24px",opacity:.5}}><div style={{fontSize:"2rem",marginBottom:8}}>🤝</div><div style={{fontFamily:"'Cinzel',serif",fontSize:".72rem",color:"var(--gm)"}}>Még nincsenek barátaid. Keress valakit!</div></div>
         :<div style={{display:"flex",flexDirection:"column",gap:7}}>
           <div style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",letterSpacing:".14em",color:"var(--gm)",textTransform:"uppercase"}}>— {friends.length} Szövetséges —</div>
-          {[...friends].sort((a,b)=>(b.score||0)-(a.score||0)).map((f,i)=>{
+          {[...friends].sort((a,b)=>{const aOn=onlineStatus[a.name]?.online?1:0;const bOn=onlineStatus[b.name]?.online?1:0;if(bOn!==aOn)return bOn-aOn;return(b.score||0)-(a.score||0);}).map((f,i)=>{
             const fr=RACES.find(r=>r.id===f.race)||RACES[3];
+            const isOnline=onlineStatus[f.name]?.online;
             return <div key={f.name} style={{display:"flex",alignItems:"center",gap:9,padding:"9px 10px",background:"rgba(255,255,255,.02)",border:"1px solid rgba(201,168,76,.09)"}}>
               <div style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",color:"var(--gm)",minWidth:14}}>{i+1}.</div>
-              <div style={{width:34,height:34,borderRadius:"50%",border:`1.5px solid ${fr.color}`,background:`radial-gradient(circle,${fr.color}22,transparent)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:".95rem",flexShrink:0}}>{fr.icon}</div>
+              <div style={{position:"relative",flexShrink:0}}>
+                <div style={{width:34,height:34,borderRadius:"50%",border:`1.5px solid ${fr.color}`,background:`radial-gradient(circle,${fr.color}22,transparent)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:".95rem"}}>{fr.icon}</div>
+                <div style={{position:"absolute",bottom:-1,right:-1,width:10,height:10,borderRadius:"50%",background:isOnline?"#66BB6A":"#5A5040",border:"2px solid rgba(8,6,4,.95)",boxShadow:isOnline?"0 0 6px rgba(102,187,106,.5)":"none"}}/>
+              </div>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontFamily:"'Cinzel',serif",fontSize:".72rem",color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.name}</div>
-                <div style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:fr.color,textTransform:"uppercase"}}>{fr.name}</div>
+                <div style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:isOnline?"#66BB6A":fr.color,textTransform:"uppercase"}}>{isOnline?"Online":"Offline"} · {fr.name}</div>
               </div>
               <div style={{fontFamily:"'Cinzel',serif",fontSize:".68rem",color:"var(--gold)"}}>{f.score||0}pt</div>
+              <button onClick={()=>setChatWith(f.name)} style={{padding:"4px 8px",background:"rgba(58,122,139,.08)",border:"1px solid rgba(58,122,139,.35)",color:"#4DADE2",fontFamily:"'Cinzel',serif",fontSize:".52rem",cursor:"pointer",whiteSpace:"nowrap"}}>💬 Chat</button>
               <button onClick={()=>onInviteFriend&&onInviteFriend(f.name)} style={{padding:"4px 8px",background:"rgba(122,74,187,.1)",border:"1px solid rgba(122,74,187,.35)",color:"#B39DDB",fontFamily:"'Cinzel',serif",fontSize:".52rem",cursor:"pointer",whiteSpace:"nowrap"}}>🎲 Meghív</button>
               <button onClick={()=>removeFriend(f.name)} style={{background:"none",border:"1px solid rgba(229,57,53,.2)",color:"rgba(229,57,53,.5)",width:22,height:22,cursor:"pointer",fontSize:".65rem",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>×</button>
             </div>;
           })}
         </div>
       }
+
+      {/* Chat panel */}
+      {chatWith&&<div style={{position:"fixed",inset:0,zIndex:300,background:"rgba(4,3,2,.92)",display:"flex",flexDirection:"column",animation:"fadeSlideIn .25s ease both"}}>
+        {/* Chat header */}
+        <div style={{padding:"12px 16px",background:"rgba(10,8,5,.98)",borderBottom:"1px solid rgba(201,168,76,.15)",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+          <button onClick={()=>{setChatWith(null);setMessages([]);setMsgInput("");}} style={{padding:"6px 12px",background:"none",border:"1px solid rgba(201,168,76,.2)",color:"var(--gm)",fontFamily:"'Cinzel',serif",fontSize:".65rem",cursor:"pointer"}}>← Vissza</button>
+          <div style={{flex:1}}>
+            <div style={{fontFamily:"'Cinzel',serif",fontSize:".8rem",color:"var(--gold)"}}>{chatWith}</div>
+            <div style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:"var(--gm)",letterSpacing:".08em"}}>CHAT</div>
+          </div>
+          <button onClick={()=>{onInviteFriend&&onInviteFriend(chatWith);}} style={{padding:"5px 10px",background:"rgba(122,74,187,.1)",border:"1px solid rgba(122,74,187,.35)",color:"#B39DDB",fontFamily:"'Cinzel',serif",fontSize:".55rem",cursor:"pointer"}}>🎲 Meghív társasozni</button>
+        </div>
+        {/* Messages */}
+        <div className="sc" style={{flex:1,overflowY:"auto",padding:"12px 16px",display:"flex",flexDirection:"column",gap:6}}>
+          {messages.length===0&&<div style={{textAlign:"center",padding:"40px 0",opacity:.4}}>
+            <div style={{fontSize:"2rem",marginBottom:8}}>💬</div>
+            <div style={{fontFamily:"'Cinzel',serif",fontSize:".72rem",color:"var(--gm)"}}>Kezdj el beszélgetni!</div>
+          </div>}
+          {messages.map((m,i)=>{
+            const isMe=m.from===myName;
+            const time=new Date(m.ts);
+            const timeStr=`${String(time.getHours()).padStart(2,"0")}:${String(time.getMinutes()).padStart(2,"0")}`;
+            return <div key={i} style={{display:"flex",flexDirection:"column",alignItems:isMe?"flex-end":"flex-start",maxWidth:"80%",alignSelf:isMe?"flex-end":"flex-start"}}>
+              <div style={{padding:"8px 12px",background:isMe?"rgba(201,168,76,.1)":"rgba(58,122,139,.08)",border:`1px solid ${isMe?"rgba(201,168,76,.25)":"rgba(58,122,139,.2)"}`,borderRadius:isMe?"12px 12px 2px 12px":"12px 12px 12px 2px",maxWidth:"100%",wordBreak:"break-word"}}>
+                {!isMe&&<div style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:"#4DADE2",marginBottom:2}}>{m.from}</div>}
+                <div style={{fontFamily:"'EB Garamond',serif",fontSize:".92rem",color:"var(--text)",lineHeight:1.4}}>{m.text}</div>
+              </div>
+              <div style={{fontFamily:"'Cinzel',serif",fontSize:".42rem",color:"var(--gm)",marginTop:2,padding:"0 4px"}}>{timeStr}</div>
+            </div>;
+          })}
+          <div ref={chatEndRef}/>
+        </div>
+        {/* Input */}
+        <div style={{padding:"10px 16px",background:"rgba(10,8,5,.98)",borderTop:"1px solid rgba(201,168,76,.15)",display:"flex",gap:8,flexShrink:0}}>
+          <input value={msgInput} onChange={e=>setMsgInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&sendMessage()} placeholder="Üzenet írása..." style={{flex:1,background:"rgba(0,0,0,.5)",border:"1px solid rgba(201,168,76,.18)",color:"var(--text)",fontFamily:"'EB Garamond',serif",fontSize:".92rem",padding:"10px 14px",outline:"none",borderRadius:4}}/>
+          <button onClick={sendMessage} style={{padding:"10px 18px",background:"rgba(201,168,76,.1)",border:"1px solid rgba(201,168,76,.4)",color:"var(--gold)",fontFamily:"'Cinzel',serif",fontSize:".72rem",cursor:"pointer",borderRadius:4,whiteSpace:"nowrap"}}>Küldés ›</button>
+        </div>
+      </div>}
     </div>}
 
     {/* LEADERBOARD */}
-    {tab==="leaderboard"&&<div role="list" aria-label="Ranglétra" style={{padding:"14px 12px",display:"flex",flexDirection:"column",gap:8}}>
-      <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".72rem",letterSpacing:".1em",color:"var(--gold)",textAlign:"center",marginBottom:4}}>Középföldé Ranglétrálja</div>
-      {leaderboard.map((p,i)=>{
-        const pr=RACES.find(r=>r.id===p.race)||RACES[3];
-        const pr_rank=getRank(p.score);
-        const medal=i===0?"🥇":i===1?"🥈":i===2?"🥉":null;
-        const medalBg=i===0?"rgba(255,215,0,.06)":i===1?"rgba(192,192,192,.05)":i===2?"rgba(205,127,50,.05)":"transparent";
-        const medalBorder=i===0?"rgba(255,215,0,.25)":i===1?"rgba(192,192,192,.2)":i===2?"rgba(205,127,50,.2)":p.isMe?"rgba(201,168,76,.3)":"rgba(201,168,76,.07)";
-        return <div key={p.name+i} style={{display:"flex",alignItems:"center",gap:9,padding:"9px 10px",background:p.isMe?`linear-gradient(90deg,${pr.color}12,rgba(201,168,76,.07))`:medalBg||(i%2===1?"rgba(255,255,255,.015)":"transparent"),border:`1px solid ${medalBorder}`,boxShadow:p.isMe?`0 0 14px ${pr.color}22`:"none",position:p.isMe?"sticky":"static",bottom:p.isMe?0:"auto",zIndex:p.isMe?2:1}}>
-          <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".75rem",color:i<3?"var(--gold)":"var(--gm)",minWidth:22,textAlign:"center"}}>{medal||`${i+1}.`}</div>
-          <div style={{width:32,height:32,borderRadius:"50%",border:`1.5px solid ${pr.color}`,background:`radial-gradient(circle,${pr.color}22,transparent)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:".9rem",flexShrink:0}}>{pr.icon}</div>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{fontFamily:"'Cinzel',serif",fontSize:".72rem",color:p.isMe?"var(--gold)":"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}{p.isMe?" (Te)":""}</div>
-            <div style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:pr_rank.color}}>{pr_rank.label}</div>
-          </div>
-          <div style={{textAlign:"right",flexShrink:0}}>
-            <div style={{fontFamily:"'Cinzel',serif",fontSize:".72rem",color:"var(--gold)"}}>{p.score}pt</div>
-            <div style={{fontFamily:"'Cinzel',serif",fontSize:".48rem",color:"var(--gm)"}}>{p.tasks}/{TASKS.length} ✓</div>
-          </div>
-        </div>;
-      })}
-    </div>}
+    {tab==="leaderboard"&&<LeaderboardPanel leaderboard={leaderboard} myName={myName}/>}
 
     {/* DAILY */}
     {tab==="daily"&&<div style={{padding:"14px 12px",display:"flex",flexDirection:"column",gap:12}}>
@@ -1317,8 +1531,8 @@ function ProfileTab({user,completed,scores,onInviteFriend}){
 }
 
 // ── BOARD GAME TAB ─────────────────────────────────────────────────────────────
-function BoardGameTab({user}){
-  return <BoardGame user={user}/>;
+function BoardGameTab({user,onBack}){
+  return <BoardGame user={user} onBack={onBack}/>;
 }
 
 // ── MAIN APP ───────────────────────────────────────────────────────────────────
@@ -1330,8 +1544,64 @@ export default function HobbitApp(){
   const [scores,setScores]=useState(()=>{try{return JSON.parse(localStorage.getItem("hobbit_task_scores")||"{}");}catch{return {};}});
   const [activeTask,setActiveTask]=useState(null);
   const [tab,setTab]=useState("map");
+  const [gameInvitePopup,setGameInvitePopup]=useState(null);
   const race=RACES.find(r=>r.id===user?.race)||RACES[3];
   const totalScore=Object.values(scores).reduce((a,b)=>a+b,0);
+  const myName=user?.adventureName;
+
+  // Global game invite listener
+  useEffect(()=>{
+    if(!myName) return;
+    try{
+      const {getDatabase,ref:fbRef,onValue,off}=window.__fbDB||{};
+      if(!getDatabase) return;
+      const db=getDatabase();
+      const invRef=fbRef(db,`users/${myName}/gameInvites`);
+      onValue(invRef,(snap)=>{
+        const data=snap.val()||{};
+        const invites=Object.values(data);
+        if(invites.length>0&&!gameInvitePopup){
+          setGameInvitePopup(invites[0]);
+        }else if(invites.length===0){
+          setGameInvitePopup(null);
+        }
+      });
+      return ()=>off(invRef);
+    }catch(e){}
+  },[myName]);
+
+  const acceptGameInvite=async(inv)=>{
+    try{
+      const {getDatabase,ref:fbRef,remove,update,get}=window.__fbDB||{};
+      if(!getDatabase) return;
+      const db=getDatabase();
+      // Remove invite
+      await remove(fbRef(db,`users/${myName}/gameInvites/${inv.from}`));
+      // Join the game
+      const snap=await get(fbRef(db,`games/${inv.gameId}`));
+      if(snap.exists()){
+        const d=snap.val();
+        if(d.status==="waiting"&&Object.keys(d.players||{}).length<4){
+          await update(fbRef(db,`games/${inv.gameId}/players/${myName}`),{name:myName,race:user?.race||"human",position:0,score:0,coins:50,cards:[],skipTurn:false,extraStep:0});
+          // Set localStorage so BoardGame picks up the game
+          localStorage.setItem("hb_gameId",inv.gameId);
+          localStorage.setItem("hb_screen","waiting");
+        }
+      }
+      setGameInvitePopup(null);
+      setTab("board");
+    }catch(e){setGameInvitePopup(null);}
+  };
+
+  const declineGameInvite=(inv)=>{
+    try{
+      const {getDatabase,ref:fbRef,remove}=window.__fbDB||{};
+      if(!getDatabase) return;
+      const db=getDatabase();
+      remove(fbRef(db,`users/${myName}/gameInvites/${inv.from}`));
+      setGameInvitePopup(null);
+    }catch(e){setGameInvitePopup(null);}
+  };
 
   const handleComplete=useCallback((taskId,score)=>{
     setCompleted(c=>{const next=c.includes(taskId)?c:[...c,taskId];const cu=JSON.parse(localStorage.getItem("hobbit_current")||"{}");cu.completedTasks=next;localStorage.setItem("hobbit_current",JSON.stringify(cu));return next;});
@@ -1363,12 +1633,14 @@ export default function HobbitApp(){
         </header>
 
         {/* Content */}
+        <ErrorCatch>
         <div style={{flex:1,display:"flex",flexDirection:"column",minHeight:0,overflow:"hidden"}}>
-          {tab==="map"    &&<AdventureMap user={user} completed={completed} scores={scores} onSelect={setActiveTask}/>}
-          {tab==="games"  &&<MiniGamesTab/>}
-          {tab==="profile"&&<ProfileTab user={user} completed={completed} scores={scores} onInviteFriend={(friendName)=>{setTab("board");}}/>}
-          {tab==="board"  &&<BoardGameTab user={user}/>}
+          {tab==="map"    &&<div key="map" className="tab-content" style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}><AdventureMap user={user} completed={completed} scores={scores} onSelect={setActiveTask}/></div>}
+          {tab==="games"  &&<div key="games" className="tab-content" style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}><MiniGamesTab/></div>}
+          {tab==="profile"&&<div key="profile" className="tab-content" style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}><ProfileTab user={user} completed={completed} scores={scores} onInviteFriend={(friendName)=>{setTab("board");}}/></div>}
+          {tab==="board"  &&<div key="board" className="tab-content" style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}><BoardGameTab user={user} onBack={()=>setTab("map")}/></div>}
         </div>
+        </ErrorCatch>
 
         {/* Bottom tab bar */}
         <nav style={{display:"flex",borderTop:"1px solid rgba(201,168,76,.14)",background:"rgba(8,6,4,.95)",backdropFilter:"blur(10px)",flexShrink:0}}>
@@ -1380,6 +1652,26 @@ export default function HobbitApp(){
       </div>
 
       {activeTask&&<TaskModal task={activeTask} user={user} onClose={()=>setActiveTask(null)} onComplete={handleComplete}/>}
+
+      {/* Global game invite popup */}
+      {gameInvitePopup&&tab!=="board"&&<div style={{position:"fixed",inset:0,zIndex:500,background:"rgba(4,3,2,.85)",display:"flex",alignItems:"center",justifyContent:"center",padding:20,animation:"fadeIn .3s ease both"}}>
+        <div style={{width:"100%",maxWidth:380,background:"linear-gradient(170deg,rgba(22,16,7,.99),rgba(8,6,2,.99))",border:"1px solid rgba(122,74,187,.4)",padding:"28px 24px",display:"flex",flexDirection:"column",gap:16,borderRadius:4,boxShadow:"0 0 60px rgba(122,74,187,.15), 0 0 120px rgba(0,0,0,.8)",animation:"modalIn .35s cubic-bezier(.22,1,.36,1) both"}}>
+          <div style={{textAlign:"center"}}>
+            <div style={{fontSize:"2.5rem",marginBottom:8,animation:"gentlePop .4s ease both"}}>🎲</div>
+            <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.1rem",color:"var(--gold)"}}>Társas Meghívó!</div>
+          </div>
+          <div style={{textAlign:"center",padding:"14px",background:"rgba(122,74,187,.06)",border:"1px solid rgba(122,74,187,.2)",borderRadius:3}}>
+            <div style={{fontFamily:"'EB Garamond',serif",fontSize:"1rem",color:"var(--text)",lineHeight:1.5}}>
+              <span style={{fontFamily:"'Cinzel',serif",color:"#B39DDB",fontWeight:600}}>{gameInvitePopup.from}</span> meghívott társasozni!
+            </div>
+            <div style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",color:"var(--gm)",marginTop:6,letterSpacing:".1em"}}>SZOBA: {gameInvitePopup.gameId}</div>
+          </div>
+          <div style={{display:"flex",gap:10}}>
+            <button onClick={()=>declineGameInvite(gameInvitePopup)} style={{flex:1,padding:"12px",background:"transparent",border:"1px solid rgba(229,57,53,.25)",color:"rgba(229,57,53,.7)",fontFamily:"'Cinzel',serif",fontSize:".75rem",cursor:"pointer",borderRadius:3,letterSpacing:".06em"}}>✗ Elutasít</button>
+            <button onClick={()=>acceptGameInvite(gameInvitePopup)} style={{flex:1,padding:"12px",background:"linear-gradient(135deg,rgba(102,187,106,.12),rgba(102,187,106,.05))",border:"1px solid rgba(102,187,106,.5)",color:"#66BB6A",fontFamily:"'Cinzel',serif",fontSize:".75rem",cursor:"pointer",borderRadius:3,letterSpacing:".06em",boxShadow:"0 0 18px rgba(102,187,106,.12)"}}>✓ Csatlakozás</button>
+          </div>
+        </div>
+      </div>}
     </div>
   </>;
 }
@@ -1393,8 +1685,15 @@ body{background:var(--bg);}
 .root{height:100vh;background:radial-gradient(ellipse at 20% 20%,rgba(120,30,30,.06) 0%,transparent 55%),radial-gradient(ellipse at 80% 80%,rgba(60,35,100,.05) 0%,transparent 55%),var(--bg);font-family:'EB Garamond',serif;color:var(--text);position:relative;overflow:hidden;}
 .noise{position:fixed;inset:0;z-index:1;pointer-events:none;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");opacity:.4;}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes fadeSlideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeSlideOut{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-8px)}}
 @keyframes popIn{from{opacity:0;transform:scale(.3)}to{opacity:1;transform:scale(1)}}
 @keyframes modalIn{from{opacity:0;transform:scale(.95) translateY(10px)}to{opacity:1;transform:none}}
+@keyframes cardFlip{0%{transform:rotateY(0deg) scale(1)}50%{transform:rotateY(90deg) scale(1.05)}100%{transform:rotateY(0deg) scale(1)}}
+@keyframes gentlePop{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:scale(1)}}
+.tab-content{animation:fadeSlideIn .35s cubic-bezier(.22,1,.36,1) both;}
+.card-flip{animation:cardFlip .35s ease both;}
+.gentle-pop{animation:gentlePop .3s cubic-bezier(.22,1,.36,1) both;}
 @keyframes emFl{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
 @keyframes nodePulse{0%,100%{transform:translate(-50%,-50%) scale(1);opacity:.25}50%{transform:translate(-50%,-50%) scale(1.5);opacity:.08}}
 @keyframes runeFlicker{0%,100%{opacity:.5}50%{opacity:.15}}
@@ -1443,7 +1742,9 @@ body{background:var(--bg);}
 .avatar-glow{animation:avatarPulse 3s ease-in-out infinite;}
 .map-parchment{border-radius:3px;overflow:hidden;}
 @keyframes mapSparkle{0%,100%{opacity:.08}50%{opacity:.2}}
+@keyframes dragonGlow{0%,100%{opacity:.6}50%{opacity:1}}
 .map-sparkle{animation:mapSparkle 2.5s ease-in-out infinite;}
+button{transition:all .25s cubic-bezier(.22,1,.36,1);}
 .profile-subtab::after{content:'';position:absolute;bottom:0;left:10%;width:0;height:2px;background:var(--gold);transition:width .3s ease;}
 .profile-subtab[aria-selected="true"]::after{width:80%;}
 

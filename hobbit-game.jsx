@@ -1,19 +1,20 @@
 import { useState, useEffect, useRef } from "react";
 import { initializeApp, getApps } from "firebase/app";
-import { getDatabase, ref, set, get, onValue, update, push, remove, off } from "firebase/database";
+import { getDatabase, ref, set, get, onValue, update, push, remove, off, onDisconnect, serverTimestamp } from "firebase/database";
 
 const FB={apiKey:import.meta.env.VITE_FIREBASE_API_KEY,authDomain:import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,projectId:import.meta.env.VITE_FIREBASE_PROJECT_ID,databaseURL:import.meta.env.VITE_FIREBASE_DATABASE_URL};
 const _app=getApps().length?getApps()[0]:initializeApp(FB);
 const db=getDatabase(_app);
-window.__fbDB={getDatabase:()=>db,ref,set,get,onValue,update,push,remove,off};
+window.__fbDB={getDatabase:()=>db,ref,set,get,onValue,update,push,remove,off,onDisconnect,serverTimestamp};
 
 const CSS=`
 @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--gold:#C9A84C;--gold2:#FFD700;--bg:#050302;--border:rgba(201,168,76,.13);--text:#EDE8E0;--muted:rgba(237,232,224,.5);--dim:rgba(237,232,224,.25)}
 @keyframes gP{0%,100%{text-shadow:0 0 18px rgba(201,168,76,.5),0 0 36px rgba(201,168,76,.25)}50%{text-shadow:0 0 45px rgba(201,168,76,1),0 0 90px rgba(201,168,76,.6)}}
-@keyframes sU{from{transform:translateY(12px);opacity:0}to{transform:translateY(0);opacity:1}}
-@keyframes zI{from{transform:scale(.9);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes sU{from{transform:translateY(10px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes zI{from{transform:scale(.96);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes screenIn{from{opacity:0}to{opacity:1}}
 @keyframes rp{0%{r:0;opacity:.8}100%{r:5;opacity:0}}
 @keyframes tF{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
 @keyframes dF{to{stroke-dashoffset:-12}}
@@ -27,15 +28,16 @@ const CSS=`
 @keyframes fogMove{0%,100%{transform:translateX(0)}50%{transform:translateX(6px)}}
 @keyframes starBlink{0%,100%{opacity:.1}50%{opacity:.85}}
 @keyframes coinSpin{0%{transform:rotateY(0deg)}100%{transform:rotateY(360deg)}}
+@keyframes searchSlide{0%{transform:translateX(-100%)}100%{transform:translateX(350%)}}
 @keyframes rareLegendaryPulse{0%,100%{box-shadow:0 0 8px rgba(255,215,0,.25),0 4px 18px rgba(0,0,0,.5)}50%{box-shadow:0 0 22px rgba(255,215,0,.55),0 4px 28px rgba(0,0,0,.6)}}
 @keyframes rareEpicPulse{0%,100%{box-shadow:0 0 6px rgba(155,105,189,.2),0 4px 18px rgba(0,0,0,.5)}50%{box-shadow:0 0 18px rgba(155,105,189,.45),0 4px 24px rgba(0,0,0,.6)}}
 @keyframes diceGlowPulse{0%,100%{filter:drop-shadow(0 0 18px rgba(201,168,76,.6)) drop-shadow(0 0 36px rgba(201,168,76,.3))}50%{filter:drop-shadow(0 0 38px rgba(255,215,0,.9)) drop-shadow(0 0 70px rgba(201,168,76,.5))}}
 @keyframes tokenFloat{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-2px) scale(1.05)}}
-.btn{position:relative;overflow:hidden;cursor:pointer;transition:transform .2s,box-shadow .2s;outline:none}
-.btn::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(201,168,76,.16),transparent);transform:translateX(-110%);transition:transform .4s}
+.btn{position:relative;overflow:hidden;cursor:pointer;transition:transform .25s cubic-bezier(.22,1,.36,1),box-shadow .3s ease,border-color .3s ease,background .3s ease,color .3s ease;outline:none}
+.btn::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(201,168,76,.16),transparent);transform:translateX(-110%);transition:transform .5s cubic-bezier(.22,1,.36,1)}
 .btn:hover::after{transform:translateX(110%)}
 .btn:hover{transform:translateY(-2px);box-shadow:0 6px 22px rgba(201,168,76,.3)!important}
-.btn:active{transform:translateY(0)!important}
+.btn:active{transform:translateY(0) scale(.98)!important;transition:transform .1s!important}
 .sc::-webkit-scrollbar{width:3px}.sc::-webkit-scrollbar-thumb{background:rgba(201,168,76,.3);border-radius:2px}
 .sc::-webkit-scrollbar-track{background:rgba(0,0,0,.2)}
 .shopItem{transition:all .22s;border-radius:4px}
@@ -108,6 +110,28 @@ const FC={start:"#1e4d08",finish:"#6b4400",bonus:"#083048",trap:"#4d0000",quiz:"
 const FS={start:"#7BC34A",finish:"#FFD700",bonus:"#4DADE2",trap:"#E74C3C",quiz:"#9B69BD",minigame:"#E67E22",gollam:"#8844AD",smaug:"#FF5252",normal:"#6a5030"};
 const FR={start:3.8,finish:4.2,bonus:3.1,trap:2.9,quiz:3.1,minigame:3.1,gollam:3.3,smaug:3.8,normal:2.5};
 
+// Random encounters for normal fields
+const ENCOUNTERS=[
+  {icon:"🧙",text:"Egy vándor varázsló megáll melletted és bátorítást ad.",pts:10,coins:5,label:"Köszönöm, bölcs vándor!"},
+  {icon:"🍄",text:"Egy ösvény mentén gyógygombákat találsz. Erőt merítenek!",pts:5,coins:10,label:"Összeszedem!"},
+  {icon:"🦊",text:"Egy ravasz róka ellopja az aranyad egy részét, de cserébe megmutat egy rövidebb utat.",pts:15,coins:-10,label:"Megérte..."},
+  {icon:"🌿",text:"Pihenőt tartasz egy csendes tisztáson. A szél susog a levelek között.",pts:0,coins:5,label:"Feltöltődtem"},
+  {icon:"🗡️",text:"Egy elhagyott kardot találsz az ösvény szélén. Valamit megér a piacon.",pts:5,coins:15,label:"Felkapom!"},
+  {icon:"🐦",text:"Egy holló száll le a válladra és rúnát karcol a földbe — jó jel!",pts:10,coins:0,label:"Köszönöm, holló!"},
+  {icon:"🌧️",text:"Hirtelen vihar tör ki. Elázol és lecsúszol az ösvényről.",pts:-5,coins:0,label:"Brrr... tovább megyek"},
+  {icon:"🏕️",text:"Egy elhagyott táborra bukkansz, maradék élelemmel és néhány arannyal.",pts:5,coins:20,label:"Micsoda szerencse!"},
+  {icon:"🐺",text:"Wargok nyomait fedezed fel. Sietsz, nehogy utolérjenek!",pts:-5,coins:0,label:"Futás!"},
+  {icon:"🧝",text:"Egy tünde kereskedő felajánlja, hogy meggyógyítja sebeidet.",pts:10,coins:-5,label:"Elfogadom"},
+  {icon:"🌟",text:"Egy csillagfényes éjszakán megpillantod Earendil csillagát. Reményt ad.",pts:8,coins:0,label:"Gyönyörű..."},
+  {icon:"🗺️",text:"Egy régi térképtöredéket találsz, ami segít eligazodni.",pts:5,coins:0,label:"Hasznos lehet!"},
+  {icon:"🍺",text:"Egy barátságos fogadó! Betérsz egy korsóra és pletykákat hallasz.",pts:0,coins:-5,label:"Egészségemre!"},
+  {icon:"💎",text:"Megcsillan valami a sziklák között — egy kis drágakő!",pts:0,coins:25,label:"Zsebrevágom!"},
+  {icon:"🐻",text:"Beorn medveként átvágtat melletted! Megijedsz, de nem bántott.",pts:0,coins:0,label:"Huhh..."},
+  {icon:"🔥",text:"Egy régi tábortűz parázslik. Megmelegszol és pihentetőt alszol.",pts:5,coins:5,label:"Jólesett"},
+  {icon:"🦅",text:"A Sasok Ura egy pillanatra letekint rád. Méltónak talál.",pts:15,coins:0,label:"Megtiszteltetés!"},
+  {icon:"🌑",text:"Sötét árnyak suhannak az ösvényen. Semmit sem találsz.",pts:0,coins:0,label:"Tovább megyek..."},
+];
+
 const QS=[
   {q:"Ki volt Bilbo a trolloknak?",o:["Varázsló","Betörő","Hobbit","Kém"],a:1},
   {q:"Hány törpe volt Thorinnal?",o:["10","11","12","13"],a:3},
@@ -145,11 +169,23 @@ const RARITY_COL={common:"#8a8a9a",rare:"#4DADE2",epic:"#9B69BD",legendary:"#FFD
 const PC=SHOP_ITEMS.map(i=>({id:i.id,i:i.icon,n:i.name,d:i.desc}));
 const EMOTES=["👍","😄","😱","🤔","🎉","💀","🔥","❄️","🧙","⚔️","💍","🐉"];
 
+// ═══ ELO & RANKED ════════════════════════════════════════════════════════════
+const ELO_K=32;
+const calcElo=(myElo,oppElo,won)=>{const exp=1/(1+Math.pow(10,(oppElo-myElo)/400));return Math.round(myElo+ELO_K*(won-exp));};
+const RANK_TIERS_GAME=[
+  {min:2000,label:"Középföld Bajnoka",icon:"👑",color:"#FFD700"},
+  {min:1600,label:"Legendás Harcos",icon:"⚔️",color:"#C9A84C"},
+  {min:1200,label:"Tapasztalt Kalandor",icon:"🛡️",color:"#A0A0C0"},
+  {min:800,label:"Újonc Vándor",icon:"🗡️",color:"#A0522D"},
+  {min:0,label:"Kezdő",icon:"🌱",color:"#6B8C3E"},
+];
+const getGameRank=elo=>RANK_TIERS_GAME.find(r=>elo>=r.min)||RANK_TIERS_GAME[RANK_TIERS_GAME.length-1];
+
 // ═══ 3D KOCKA ═════════════════════════════════════════════════════════════════
 const PIPS=[[[.5,.5]],[[.25,.25],[.75,.75]],[[.25,.25],[.5,.5],[.75,.75]],[[.25,.25],[.75,.25],[.25,.75],[.75,.75]],[[.25,.25],[.75,.25],[.5,.5],[.25,.75],[.75,.75]],[[.25,.25],[.75,.25],[.25,.5],[.75,.5],[.25,.75],[.75,.75]]];
 const V3=[[-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],[-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]];
 const DF=[{v:[0,1,2,3],n:[0,0,-1],pi:0},{v:[4,5,6,7],n:[0,0,1],pi:5},{v:[0,4,7,3],n:[-1,0,0],pi:3},{v:[1,5,6,2],n:[1,0,0],pi:2},{v:[0,1,5,4],n:[0,-1,0],pi:1},{v:[3,2,6,7],n:[0,1,0],pi:4}];
-const TG={1:{x:0,y:Math.PI},2:{x:-Math.PI/2,y:0},3:{x:0,y:Math.PI/2},4:{x:0,y:-Math.PI/2},5:{x:Math.PI/2,y:0},6:{x:0,y:0}};
+const TG={1:{x:0,y:Math.PI},2:{x:-Math.PI/2,y:0},3:{x:0,y:-Math.PI/2},4:{x:0,y:Math.PI/2},5:{x:Math.PI/2,y:0},6:{x:0,y:0}};
 const rX=(v,a)=>[v[0],v[1]*Math.cos(a)-v[2]*Math.sin(a),v[1]*Math.sin(a)+v[2]*Math.cos(a)];
 const rY=(v,a)=>[v[0]*Math.cos(a)+v[2]*Math.sin(a),v[1],-v[0]*Math.sin(a)+v[2]*Math.cos(a)];
 const rZ=(v,a)=>[v[0]*Math.cos(a)-v[1]*Math.sin(a),v[0]*Math.sin(a)+v[1]*Math.cos(a),v[2]];
@@ -165,6 +201,20 @@ function Dice3D({value=1,rolling=false,size=52}){
     const proj=v=>{const z=v[2]+4.4;const fov=S*.31;return[v[0]/z*fov+S/2,v[1]/z*fov+S/2]};
     done.current=false;
     if(rolling)vel.current={x:.14+Math.random()*.1,y:.18+Math.random()*.12,z:.06+Math.random()*.08};
+    const drawRF=(pts,rad)=>{
+      const n=pts.length;ctx.beginPath();
+      for(let i=0;i<n;i++){
+        const pr=pts[(i-1+n)%n],cu=pts[i],nx=pts[(i+1)%n];
+        const d1x=pr[0]-cu[0],d1y=pr[1]-cu[1],d2x=nx[0]-cu[0],d2y=nx[1]-cu[1];
+        const l1=Math.sqrt(d1x*d1x+d1y*d1y),l2=Math.sqrt(d2x*d2x+d2y*d2y);
+        const r=Math.min(rad,l1*.28,l2*.28);
+        const p1x=cu[0]+(d1x/l1)*r,p1y=cu[1]+(d1y/l1)*r;
+        const p2x=cu[0]+(d2x/l2)*r,p2y=cu[1]+(d2y/l2)*r;
+        if(i===0)ctx.moveTo(p1x,p1y);else ctx.lineTo(p1x,p1y);
+        ctx.quadraticCurveTo(cu[0],cu[1],p2x,p2y);
+      }
+      ctx.closePath();
+    };
     function frame(){
       ctx.clearRect(0,0,S,S);
       const {x,y,z}=ang.current;
@@ -172,29 +222,54 @@ function Dice3D({value=1,rolling=false,size=52}){
       [...DF].map(f=>({...f,cz:f.v.reduce((a,i)=>a+tv[i][2],0)/4})).sort((a,b)=>a.cz-b.cz).forEach(face=>{
         const pts=face.v.map(i=>proj(tv[i]));
         const tn=rX(rY(face.n,y),x);if(tn[2]<-.04)return;
-        const br=Math.max(.3,d3(tn,[.25,-.65,.75])*.72+.32);
-        const r2=~~(38+br*170),g2=~~(28+br*128),b2=~~(16+br*65);
-        ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);pts.slice(1).forEach(p=>ctx.lineTo(p[0],p[1]));ctx.closePath();
+        const br=Math.max(.25,d3(tn,[.2,-.6,.78])*.7+.35);
+        const spec=Math.pow(Math.max(0,d3(tn,[.15,-.5,.85])),16)*.6;
+        const cR=S*.14;
+        const cx=(pts[0][0]+pts[2][0])/2,cy=(pts[0][1]+pts[2][1])/2;
+        drawRF(pts,cR);
         const gd=ctx.createLinearGradient(pts[0][0],pts[0][1],pts[2][0],pts[2][1]);
-        gd.addColorStop(0,`rgb(${Math.min(255,r2+50)},${Math.min(255,g2+38)},${Math.min(255,b2+18)})`);
-        gd.addColorStop(1,`rgb(${r2},${g2},${b2})`);
+        gd.addColorStop(0,`rgb(${~~(55+br*155+spec*80)},${~~(30+br*95+spec*60)},${~~(15+br*50+spec*30)})`);
+        gd.addColorStop(.5,`rgb(${~~(40+br*120+spec*40)},${~~(22+br*70+spec*30)},${~~(10+br*35+spec*15)})`);
+        gd.addColorStop(1,`rgb(${~~(30+br*100)},${~~(16+br*58)},${~~(8+br*28)})`);
         ctx.fillStyle=gd;ctx.fill();
-        ctx.strokeStyle=`rgba(201,168,76,${.38*br})`;ctx.lineWidth=(S/72);ctx.stroke();
-        if(tn[2]>.22){
+        if(spec>.02){
+          drawRF(pts,cR);
+          const sg=ctx.createRadialGradient(cx-S*.02,cy-S*.04,0,cx,cy,S*.28);
+          sg.addColorStop(0,`rgba(255,240,200,${spec*.5})`);
+          sg.addColorStop(.4,`rgba(255,220,160,${spec*.2})`);
+          sg.addColorStop(1,"rgba(255,220,160,0)");
+          ctx.fillStyle=sg;ctx.fill();
+        }
+        drawRF(pts,cR);
+        ctx.strokeStyle=`rgba(200,170,70,${.4*br+spec*.3})`;ctx.lineWidth=S/50;ctx.stroke();
+        const inPts=pts.map(p=>[p[0]+(cx-p[0])*.07,p[1]+(cy-p[1])*.07]);
+        drawRF(inPts,cR*.85);
+        ctx.strokeStyle=`rgba(255,230,160,${.08*br+spec*.15})`;ctx.lineWidth=S/120;ctx.stroke();
+        if(tn[2]>.2){
           const pips2=PIPS[face.pi]||[];const [p0,p1,p2,p3]=pts;
           pips2.forEach(([u,v2])=>{
             const t1=[p0[0]+(p1[0]-p0[0])*u,p0[1]+(p1[1]-p0[1])*u];
             const t2=[p3[0]+(p2[0]-p3[0])*u,p3[1]+(p2[1]-p3[1])*u];
-            const px=t1[0]+(t2[0]-t1[0])*v2,py=t1[1]+(t2[1]-t1[1])*v2,pr=3.8*(S/72)*br;
-            ctx.beginPath();ctx.arc(px,py,pr,0,Math.PI*2);ctx.fillStyle=`rgba(255,228,140,${.9*br})`;ctx.fill();
-            ctx.beginPath();ctx.arc(px-pr*.28,py-pr*.28,pr*.4,0,Math.PI*2);ctx.fillStyle=`rgba(255,255,255,${.5*br})`;ctx.fill();
+            const px=t1[0]+(t2[0]-t1[0])*v2,py=t1[1]+(t2[1]-t1[1])*v2;
+            const pr=2.8*(S/72)*Math.sqrt(br);
+            ctx.beginPath();ctx.arc(px+pr*.2,py+pr*.25,pr*1.15,0,Math.PI*2);
+            ctx.fillStyle=`rgba(0,0,0,${.3*br})`;ctx.fill();
+            ctx.beginPath();ctx.arc(px,py,pr,0,Math.PI*2);
+            const pg=ctx.createRadialGradient(px-pr*.3,py-pr*.3,0,px,py,pr);
+            pg.addColorStop(0,`rgba(255,250,230,${.95*br})`);
+            pg.addColorStop(.5,`rgba(235,200,120,${.9*br})`);
+            pg.addColorStop(1,`rgba(190,150,70,${.85*br})`);
+            ctx.fillStyle=pg;ctx.fill();
+            ctx.strokeStyle=`rgba(160,120,50,${.3*br})`;ctx.lineWidth=S/150;ctx.stroke();
+            ctx.beginPath();ctx.arc(px-pr*.22,py-pr*.22,pr*.32,0,Math.PI*2);
+            ctx.fillStyle=`rgba(255,255,255,${.55*br})`;ctx.fill();
           });
         }
       });
       if(rolling){
-        const g=ctx.createRadialGradient(S/2,S/2,S*.25,S/2,S/2,S*.54);
-        g.addColorStop(0,"rgba(201,168,76,0)");g.addColorStop(1,"rgba(201,168,76,.28)");
-        ctx.fillStyle=g;ctx.beginPath();ctx.arc(S/2,S/2,S*.54,0,Math.PI*2);ctx.fill();
+        const g=ctx.createRadialGradient(S/2,S/2,S*.2,S/2,S/2,S*.55);
+        g.addColorStop(0,"rgba(255,180,50,0)");g.addColorStop(.6,"rgba(255,170,40,.12)");g.addColorStop(1,"rgba(201,168,76,.25)");
+        ctx.fillStyle=g;ctx.beginPath();ctx.arc(S/2,S/2,S*.55,0,Math.PI*2);ctx.fill();
         ang.current.x+=vel.current.x;ang.current.y+=vel.current.y;ang.current.z+=vel.current.z;
         vel.current.x*=.997;vel.current.y*=.997;vel.current.z*=.997;
       } else if(!done.current&&value){
@@ -206,7 +281,7 @@ function Dice3D({value=1,rolling=false,size=52}){
     raf.current=requestAnimationFrame(frame);
     return()=>cancelAnimationFrame(raf.current);
   },[value,rolling,size]);
-  return <canvas ref={cvs} style={{width:size,height:size,display:"block",filter:rolling?"drop-shadow(0 0 14px rgba(255,200,80,.9)) drop-shadow(0 0 28px rgba(201,168,76,.5))":"drop-shadow(0 0 6px rgba(201,168,76,.5)) drop-shadow(0 0 2px rgba(0,0,0,.9))",transition:"filter .3s ease"}}/>;
+  return <canvas ref={cvs} style={{width:size,height:size,display:"block",filter:rolling?"drop-shadow(0 0 18px rgba(255,180,50,.9)) drop-shadow(0 0 40px rgba(201,168,76,.5))":"drop-shadow(0 0 8px rgba(180,140,60,.65)) drop-shadow(0 0 3px rgba(0,0,0,.9))",transition:"filter .3s ease"}}/>;
 }
 
 function Burst({x,y,color="#C9A84C",onDone}){
@@ -277,7 +352,8 @@ function SpotRing({onResult}){
 // ═══ EVENT MODAL ══════════════════════════════════════════════════════════════
 function EventModal({field,onResult}){
   const [phase,setPhase]=useState("intro");const [won,setWon]=useState(false);const [pts,setPts]=useState(0);
-  const INFO={bonus:{c:"#4DADE2",g:"rgba(77,173,226,.35)",t:"Bónusz!"},trap:{c:"#E74C3C",g:"rgba(231,76,60,.35)",t:"Csapda!"},quiz:{c:"#9B69BD",g:"rgba(155,105,189,.35)",t:"Kvíz!"},minigame:{c:"#E67E22",g:"rgba(230,126,34,.35)",t:"Minijáték!"},gollam:{c:"#8844AD",g:"rgba(136,68,173,.4)",t:"Gollam!"},smaug:{c:"#FF5252",g:"rgba(255,82,82,.4)",t:"SMAUG!"},finish:{c:"#FFD700",g:"rgba(255,215,0,.4)",t:"GYŐZELEM!"}};
+  const [encounter]=useState(()=>ENCOUNTERS[~~(Math.random()*ENCOUNTERS.length)]);
+  const INFO={bonus:{c:"#4DADE2",g:"rgba(77,173,226,.35)",t:"Bónusz!"},trap:{c:"#E74C3C",g:"rgba(231,76,60,.35)",t:"Csapda!"},quiz:{c:"#9B69BD",g:"rgba(155,105,189,.35)",t:"Kvíz!"},minigame:{c:"#E67E22",g:"rgba(230,126,34,.35)",t:"Minijáték!"},gollam:{c:"#8844AD",g:"rgba(136,68,173,.4)",t:"Gollam!"},smaug:{c:"#FF5252",g:"rgba(255,82,82,.4)",t:"SMAUG!"},finish:{c:"#FFD700",g:"rgba(255,215,0,.4)",t:"GYŐZELEM!"},normal:{c:"#B8976A",g:"rgba(184,151,106,.3)",t:"Találkozás"},start:{c:"#7BC34A",g:"rgba(123,195,74,.3)",t:"Indulás!"}};
   const info=INFO[field.t]||{c:"var(--gold)",g:"rgba(201,168,76,.2)",t:"Mező"};
   const done=(ok,p)=>{setWon(ok);setPts(p);setPhase("result");setTimeout(()=>onResult({ok,pts:p,field}),1200);};
   return <div style={{position:"fixed",inset:0,zIndex:600,background:"rgba(2,1,0,.96)",display:"flex",alignItems:"center",justifyContent:"center",padding:20,animation:"zI .22s ease"}}>
@@ -285,6 +361,22 @@ function EventModal({field,onResult}){
     <div style={{width:"100%",maxWidth:420,background:"linear-gradient(170deg,rgba(14,9,5,.99),rgba(4,3,1,.99))",border:`1px solid ${info.c}28`,padding:"24px 22px",display:"flex",flexDirection:"column",gap:16,maxHeight:"84vh",overflowY:"auto",boxShadow:`0 0 70px ${info.g}`,position:"relative",animation:"sU .25s ease"}}>
       {[["top","left"],["top","right"],["bottom","left"],["bottom","right"]].map(([v,h])=><div key={v+h} style={{position:"absolute",[v]:7,[h]:7,width:12,height:12,borderTop:v==="top"?`1px solid ${info.c}45`:"none",borderBottom:v==="bottom"?`1px solid ${info.c}45`:"none",borderLeft:h==="left"?`1px solid ${info.c}45`:"none",borderRight:h==="right"?`1px solid ${info.c}45`:"none"}}/>)}
       {phase==="intro"&&<>
+        {(field.t==="normal"||field.t==="start")
+        ?<>
+          <div style={{textAlign:"center"}}>
+            <div style={{fontSize:"3.2rem",marginBottom:8,filter:`drop-shadow(0 0 22px ${info.g})`}}>{encounter.icon}</div>
+            <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.1rem",color:info.c,animation:"gP 2s ease infinite"}}>{info.t}</div>
+            <div style={{fontFamily:"'Cinzel',serif",fontSize:".72rem",color:"var(--gold)",marginTop:5}}>{field.n}</div>
+            <div style={{fontFamily:"'EB Garamond',serif",fontSize:".95rem",color:"var(--muted)",marginTop:12,fontStyle:"italic",lineHeight:1.7}}>{encounter.text}</div>
+          </div>
+          <div style={{display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap"}}>
+            {encounter.pts!==0&&<div style={{padding:"6px 12px",background:encounter.pts>0?"rgba(102,187,106,.08)":"rgba(229,57,53,.08)",border:`1px solid ${encounter.pts>0?"rgba(102,187,106,.3)":"rgba(229,57,53,.3)"}`,fontFamily:"'Cinzel',serif",fontSize:".68rem",color:encounter.pts>0?"#66BB6A":"#EF9A9A"}}>{encounter.pts>0?"+":""}{encounter.pts} pont</div>}
+            {encounter.coins!==0&&<div style={{padding:"6px 12px",background:encounter.coins>0?"rgba(201,168,76,.08)":"rgba(229,57,53,.08)",border:`1px solid ${encounter.coins>0?"rgba(201,168,76,.3)":"rgba(229,57,53,.3)"}`,fontFamily:"'Cinzel',serif",fontSize:".68rem",color:encounter.coins>0?"var(--gold)":"#EF9A9A"}}>🪙 {encounter.coins>0?"+":""}{encounter.coins}</div>}
+            {encounter.pts===0&&encounter.coins===0&&<div style={{padding:"6px 12px",background:"rgba(201,168,76,.05)",border:"1px solid rgba(201,168,76,.15)",fontFamily:"'Cinzel',serif",fontSize:".68rem",color:"var(--gm)"}}>Semmi különös</div>}
+          </div>
+          <button className="btn" onClick={()=>onResult({ok:encounter.pts>=0,pts:encounter.pts,field,encounterCoins:encounter.coins})} style={{padding:"12px",background:"rgba(201,168,76,.08)",border:"1px solid rgba(201,168,76,.35)",color:"var(--gold)",fontFamily:"'Cinzel',serif",fontSize:".75rem",letterSpacing:".1em",textTransform:"uppercase"}}>{encounter.label}</button>
+        </>
+        :<>
         <div style={{textAlign:"center"}}>
           <div style={{fontSize:"3.2rem",marginBottom:8,filter:`drop-shadow(0 0 22px ${info.g})`}}>{field.e}</div>
           <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.1rem",color:info.c,animation:"gP 2s ease infinite"}}>{info.t}</div>
@@ -301,6 +393,7 @@ function EventModal({field,onResult}){
         </>}
         {field.t==="finish"&&<button className="btn" onClick={()=>onResult({ok:true,pts:100,field,win:true})} style={{padding:"14px",background:"rgba(255,215,0,.12)",border:"1px solid rgba(255,215,0,.55)",color:"#FFD700",fontFamily:"'Cinzel Decorative',serif",fontSize:".88rem",textShadow:"0 0 24px rgba(255,215,0,.7)",boxShadow:"0 0 40px rgba(255,215,0,.25)"}}>🏆 A KINCS A TIÉD! 🏆</button>}
         {(field.t==="quiz"||field.t==="minigame"||field.t==="gollam")&&<button className="btn" onClick={()=>setPhase("game")} style={{padding:"12px",background:`${info.g.replace(".35",".08")}`,border:`1px solid ${info.c}50`,color:info.c,fontFamily:"'Cinzel',serif",fontSize:".78rem",letterSpacing:".14em",textTransform:"uppercase",boxShadow:`0 0 20px ${info.g}`}}>⚔️ Kihívás elfogadása</button>}
+        </>}
       </>}
       {phase==="game"&&<>
         {(field.t==="quiz"||[4,17,26,27,29,32,38,43].includes(field.id))&&<QuizGame onResult={done}/>}
@@ -554,12 +647,48 @@ function PanelHeader({title,sub}){
   </div>;
 }
 
+// ═══ RANKED QUEUE SCREEN ═════════════════════════════════════════════════════
+function RankedQueueScreen({pid,user,myElo,onCancel,notif}){
+  const race=raceOf(user?.race);const rank=getGameRank(myElo);
+  const [dots,setDots]=useState("");const [elapsed,setElapsed]=useState(0);const [queueCount,setQueueCount]=useState(1);
+  useEffect(()=>{const iv=setInterval(()=>{setDots(d=>d.length>=3?"":d+".");setElapsed(e=>e+1);},1000);return()=>clearInterval(iv);},[]);
+  useEffect(()=>{
+    const qRef=ref(db,"ranked_queue");
+    onValue(qRef,(snap)=>{const d=snap.val()||{};setQueueCount(Object.keys(d).length);});
+    return()=>off(qRef);
+  },[]);
+  const mins=String(~~(elapsed/60)).padStart(2,"0");const secs=String(elapsed%60).padStart(2,"0");
+  return <div style={{position:"fixed",inset:0,background:"radial-gradient(ellipse at 50% 40%,rgba(122,74,187,.15),rgba(3,2,1,1) 70%)",display:"flex",alignItems:"center",justifyContent:"center",padding:24,zIndex:10}}>
+    <style>{CSS}</style><Notif n={notif}/>
+    <div style={{width:"100%",maxWidth:420,background:"linear-gradient(170deg,rgba(22,16,7,.98),rgba(8,6,2,.99))",border:"1px solid rgba(122,74,187,.35)",padding:"34px 26px",display:"flex",flexDirection:"column",alignItems:"center",gap:18,borderRadius:3,boxShadow:"0 0 80px rgba(0,0,0,.9), 0 0 40px rgba(122,74,187,.12)",animation:"zI .3s ease"}}>
+      <div style={{fontSize:"3rem",animation:"tokenFloat 2s ease-in-out infinite",filter:"drop-shadow(0 0 22px rgba(122,74,187,.6))"}}>⚔️</div>
+      <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.3rem",color:"#B39DDB",animation:"gP 2s ease infinite"}}>Ranked Keresés</div>
+      <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 18px",background:`rgba(${race.rgb},.08)`,border:`1px solid rgba(${race.rgb},.28)`,borderRadius:3}}>
+        <span style={{fontSize:"1.2rem"}}>{race.icon}</span>
+        <span style={{fontFamily:"'Cinzel',serif",fontSize:".72rem",color:"var(--gold)"}}>{pid}</span>
+        <span style={{fontFamily:"'Cinzel',serif",fontSize:".6rem",color:rank.color,border:`1px solid ${rank.color}44`,padding:"2px 8px",background:`${rank.color}11`}}>{rank.icon} {myElo}</span>
+      </div>
+      <div style={{width:"100%",padding:"18px",background:"rgba(122,74,187,.06)",border:"1px solid rgba(122,74,187,.2)",borderRadius:3,textAlign:"center"}}>
+        <div style={{fontFamily:"'Cinzel',serif",fontSize:".9rem",color:"var(--text)",marginBottom:8}}>Ellenfél keresése{dots}</div>
+        <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.8rem",color:"#B39DDB",letterSpacing:".15em"}}>{mins}:{secs}</div>
+        <div style={{fontFamily:"'Cinzel',serif",fontSize:".58rem",color:"var(--dim)",marginTop:8}}>{queueCount} játékos a sorban</div>
+        {/* Search animation */}
+        <div style={{margin:"14px auto 0",width:120,height:4,background:"rgba(122,74,187,.15)",borderRadius:3,overflow:"hidden"}}>
+          <div style={{width:"40%",height:"100%",background:"linear-gradient(90deg,transparent,#B39DDB,transparent)",borderRadius:3,animation:"searchSlide 1.5s ease-in-out infinite"}}/>
+        </div>
+      </div>
+      <button className="btn" onClick={onCancel} style={{padding:"12px 28px",background:"rgba(229,57,53,.08)",border:"1px solid rgba(229,57,53,.3)",color:"#EF9A9A",fontFamily:"'Cinzel',serif",fontSize:".75rem",letterSpacing:".1em",textTransform:"uppercase",borderRadius:2}}>✕ Keresés Leállítása</button>
+    </div>
+  </div>;
+}
+
 // ═══ LOBBY / WAITING / FINISHED ════════════════════════════════════════════════
-function LobbyScreen({pid,user,friends,invites,onCreateGame,onJoinGame,onAcceptInvite,onDeclineInvite,onInviteFriend,notif}){
+function LobbyScreen({pid,user,friends,invites,onCreateGame,onJoinGame,onAcceptInvite,onDeclineInvite,onInviteFriend,onRankedQueue,myElo,notif,onBack}){
   const [code,setCode]=useState("");const race=raceOf(user?.race);
   return <div style={{position:"fixed",inset:0,background:"radial-gradient(ellipse at 30% 40%,rgba(62,44,14,.6),rgba(3,2,1,1) 70%)",display:"flex",alignItems:"center",justifyContent:"center",padding:24,zIndex:10}}>
     <style>{CSS}</style><Notif n={notif}/>
     <div style={{width:"100%",maxWidth:500,background:"linear-gradient(170deg,rgba(22,16,7,.98),rgba(8,6,2,.99))",border:"1px solid rgba(201,168,76,.22)",padding:"30px 26px",display:"flex",flexDirection:"column",gap:16,borderRadius:3,boxShadow:"0 0 80px rgba(0,0,0,.9), 0 0 40px rgba(139,90,43,.08), inset 0 1px 0 rgba(201,168,76,.08)",animation:"zI .3s ease"}}>
+      {onBack&&<button className="btn" onClick={onBack} style={{alignSelf:"flex-start",padding:"6px 14px",background:"none",border:"1px solid rgba(201,168,76,.2)",color:"var(--gm)",fontFamily:"'Cinzel',serif",fontSize:".65rem",cursor:"pointer",letterSpacing:".08em"}}>← Vissza</button>}
       <div style={{textAlign:"center"}}>
         <div style={{fontSize:"2.8rem",marginBottom:8,filter:"drop-shadow(0 0 22px rgba(201,168,76,.6))",animation:"gP 2.5s ease infinite"}}>🎲</div>
         <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"clamp(1rem,3vw,1.5rem)",color:"var(--gold)",animation:"gP 3s ease infinite"}}>Középföld Honfoglalója</div>
@@ -579,6 +708,9 @@ function LobbyScreen({pid,user,friends,invites,onCreateGame,onJoinGame,onAcceptI
         </div>)}
       </div>}
       <button className="btn" onClick={onCreateGame} style={{padding:"13px",background:"linear-gradient(135deg,rgba(201,168,76,.14),rgba(201,168,76,.06))",border:"1px solid rgba(201,168,76,.5)",color:"var(--gold)",fontFamily:"'Cinzel',serif",fontSize:".8rem",letterSpacing:".14em",textTransform:"uppercase",boxShadow:"0 0 22px rgba(201,168,76,.12)",borderRadius:2}}>✦ Új szoba létrehozása</button>
+      <button className="btn" onClick={onRankedQueue} style={{padding:"13px",background:"linear-gradient(135deg,rgba(122,74,187,.18),rgba(122,74,187,.06))",border:"1px solid rgba(122,74,187,.55)",color:"#B39DDB",fontFamily:"'Cinzel',serif",fontSize:".8rem",letterSpacing:".14em",textTransform:"uppercase",boxShadow:"0 0 22px rgba(122,74,187,.15)",borderRadius:2,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+        <span>⚔️</span> Ranked Meccs <span style={{fontFamily:"'Cinzel',serif",fontSize:".6rem",color:getGameRank(myElo).color,border:`1px solid ${getGameRank(myElo).color}44`,padding:"1px 6px",background:`${getGameRank(myElo).color}11`}}>{myElo}</span>
+      </button>
       <div style={{display:"flex",gap:8}}>
         <input value={code} onChange={e=>setCode(e.target.value.toUpperCase())} placeholder="Szoba kód..." maxLength={6}
           style={{flex:1,background:"rgba(0,0,0,.55)",border:"1px solid rgba(201,168,76,.22)",color:"var(--text)",fontFamily:"'Cinzel',serif",fontSize:".85rem",padding:"11px 14px",outline:"none",letterSpacing:".12em",borderRadius:2}}/>
@@ -633,12 +765,25 @@ function WaitingScreen({gameId,players,gameData,friends,pid,onStart,onInviteFrie
   </div>;
 }
 
-function FinishedScreen({players,gameData,pid,onNewGame}){
+function FinishedScreen({players,gameData,pid,onNewGame,onBack}){
+  const isRanked=gameData?.ranked;const eloSnap=gameData?.eloSnapshot||{};const eloRes=gameData?.eloResults||{};
+  const iWon=gameData?.winner===pid;
   return <div style={{position:"fixed",inset:0,background:"radial-gradient(ellipse at 50% 40%,rgba(80,60,8,.35),rgba(3,2,1,1) 65%)",display:"flex",alignItems:"center",justifyContent:"center",padding:24,zIndex:10}}>
     <style>{CSS}</style>
     <div style={{width:"100%",maxWidth:420,background:"linear-gradient(170deg,rgba(22,16,7,.98),rgba(8,6,2,.99))",border:"1px solid rgba(201,168,76,.25)",padding:"34px 26px",display:"flex",flexDirection:"column",alignItems:"center",gap:18,borderRadius:3,boxShadow:"0 0 100px rgba(0,0,0,.95), 0 0 50px rgba(139,90,43,.1), inset 0 1px 0 rgba(201,168,76,.1)",animation:"zI .35s ease"}}>
-      <div style={{fontSize:"4.5rem",animation:"wB .6s ease",filter:`drop-shadow(0 0 38px ${gameData?.winner===pid?"rgba(255,215,0,.8)":"rgba(229,57,53,.6)"})`}}>{gameData?.winner===pid?"🏆":"😔"}</div>
-      <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.4rem",color:"var(--gold)",animation:"gP 2s ease infinite",textAlign:"center"}}>{gameData?.winner===pid?"GYŐZELEM!":"Jó próbálkozás!"}</div>
+      <div style={{fontSize:"4.5rem",animation:"wB .6s ease",filter:`drop-shadow(0 0 38px ${iWon?"rgba(255,215,0,.8)":"rgba(229,57,53,.6)"})`}}>{iWon?"🏆":"😔"}</div>
+      <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.4rem",color:"var(--gold)",animation:"gP 2s ease infinite",textAlign:"center"}}>{iWon?"GYŐZELEM!":"Jó próbálkozás!"}</div>
+      {isRanked&&<div style={{padding:"12px 18px",background:"rgba(122,74,187,.08)",border:"1px solid rgba(122,74,187,.35)",borderRadius:3,textAlign:"center",width:"100%",maxWidth:280,animation:"sU .4s ease"}}>
+        <div style={{fontFamily:"'Cinzel',serif",fontSize:".6rem",color:"#B39DDB",letterSpacing:".14em",textTransform:"uppercase",marginBottom:8}}>⚔️ Ranked ELO változás</div>
+        {players.map(p=>{const oldElo=eloSnap[p.name]||1000;const newElo=eloRes[p.name]||oldElo;const diff=newElo-oldElo;const newRank=getGameRank(newElo);
+          return <div key={p.name} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"6px 0"}}>
+            <span style={{fontFamily:"'Cinzel',serif",fontSize:".7rem",color:p.isMe?"var(--gold)":"var(--text)"}}>{p.name}</span>
+            <span style={{fontFamily:"'Cinzel',serif",fontSize:".62rem",color:"var(--dim)"}}>{oldElo}</span>
+            <span style={{fontFamily:"'Cinzel',serif",fontSize:".7rem",color:diff>0?"#66BB6A":"#EF9A9A"}}>→ {newElo} ({diff>0?"+":""}{diff})</span>
+            <span style={{fontSize:".7rem"}}>{newRank.icon}</span>
+          </div>;
+        })}
+      </div>}
       <div style={{display:"flex",flexDirection:"column",gap:7,width:"100%",maxWidth:320}}>
         {players.sort((a,b)=>b.score-a.score).map((p,i)=>{const pr=raceOf(p.race);return <div key={p.name} style={{display:"flex",alignItems:"center",gap:11,padding:"10px 14px",background:p.isMe?"rgba(201,168,76,.07)":"rgba(255,255,255,.02)",border:`1px solid ${p.isMe?"rgba(201,168,76,.35)":"rgba(201,168,76,.08)"}`,animation:`sU ${.2+i*.1}s ease`,borderRadius:2}}>
           <span style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".82rem",color:"var(--gold)",minWidth:22}}>{i===0?"🥇":i===1?"🥈":"🥉"}</span>
@@ -648,12 +793,13 @@ function FinishedScreen({players,gameData,pid,onNewGame}){
         </div>;})}
       </div>
       <button className="btn" onClick={onNewGame} style={{padding:"12px 28px",background:"linear-gradient(135deg,rgba(201,168,76,.14),rgba(201,168,76,.06))",border:"1px solid rgba(201,168,76,.45)",color:"var(--gold)",fontFamily:"'Cinzel',serif",fontSize:".78rem",letterSpacing:".13em",textTransform:"uppercase",marginTop:6,borderRadius:2}}>✦ Új Játék</button>
+      {onBack&&<button className="btn" onClick={onBack} style={{padding:"8px 22px",background:"none",border:"1px solid rgba(201,168,76,.2)",color:"var(--gm)",fontFamily:"'Cinzel',serif",fontSize:".65rem",letterSpacing:".08em",cursor:"pointer",borderRadius:2}}>← Vissza a főmenübe</button>}
     </div>
   </div>;
 }
 
 // ═══ PLAYING SCREEN ════════════════════════════════════════════════════════════
-function PlayingScreen({gd,pid,user,gameId,onRoll,onEventResult,eventField,rolling,diceVals,bursts,notif,coins,onBuyItem,centerDice}){
+function PlayingScreen({gd,pid,user,gameId,onRoll,onEventResult,eventField,rolling,diceVals,bursts,notif,coins,onBuyItem,centerDice,onLeave}){
   const [chatMsg,setChatMsg]=useState("");const [selField,setSelField]=useState(null);const [showShop,setShowShop]=useState(false);
   const chatRef=useRef(null);
   useEffect(()=>{if(chatRef.current)chatRef.current.scrollTop=chatRef.current.scrollHeight;},[gd?.chat]);
@@ -662,7 +808,7 @@ function PlayingScreen({gd,pid,user,gameId,onRoll,onEventResult,eventField,rolli
   const myPos=myData?.position||0;const curField=FIELDS[myPos];
   const sendChat=async t=>{if(!t?.trim())return;await push(ref(db,`games/${gameId}/chat`),{player:pid,race:user?.race||"human",text:t.trim(),time:Date.now()});setChatMsg("");};
 
-  return <div style={{position:"fixed",inset:0,background:"#050302",display:"flex",overflow:"hidden",zIndex:10}}>
+  return <div style={{position:"fixed",inset:0,background:"#050302",display:"flex",overflow:"hidden",zIndex:10,animation:"screenIn .4s ease"}}>
     <style>{CSS}</style>
     {bursts.map(b=><Burst key={b.id} x={b.x} y={b.y} color={b.color} onDone={b.onDone}/>)}
     {centerDice&&<CenterDiceOverlay data={centerDice}/>}
@@ -769,12 +915,16 @@ function PlayingScreen({gd,pid,user,gameId,onRoll,onEventResult,eventField,rolli
             <span style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:"var(--dim)"}}>{l}</span>
           </div>)}
       </div>
+      {/* Leave */}
+      <div style={{padding:"9px 13px",borderTop:"1px solid var(--border)",flexShrink:0}}>
+        <button onClick={onLeave} className="btn" style={{width:"100%",padding:"8px 0",background:"rgba(229,57,53,.06)",border:"1px solid rgba(229,57,53,.25)",color:"#EF9A9A",fontFamily:"'Cinzel',serif",fontSize:".62rem",letterSpacing:".08em",textTransform:"uppercase",cursor:"pointer",borderRadius:2}}>✕ Kilépés</button>
+      </div>
     </div>
   </div>;
 }
 
 // ═══ CONTROLLER ════════════════════════════════════════════════════════════════
-export default function BoardGame({user}){
+export default function BoardGame({user,onBack}){
   const [screen,setScreenRaw]=useState(()=>localStorage.getItem("hb_screen")||"lobby");
   const [gameId,setGameIdRaw]=useState(()=>localStorage.getItem("hb_gameId")||null);
   const [gd,setGd]=useState(null);
@@ -786,8 +936,10 @@ export default function BoardGame({user}){
   const [invites,setInvites]=useState([]);
   const [friends,setFriends]=useState([]);
   const [bursts,setBursts]=useState([]);
-  const [centerDice,setCenterDice]=useState(null); // {rolling,value,field,playerName}
+  const [centerDice,setCenterDice]=useState(null);
+  const [myElo,setMyElo]=useState(1000);
   const screenRef=useRef(screen);
+  const queueRef=useRef(null);
 
   const setScreen=s=>{setScreenRaw(s);screenRef.current=s;localStorage.setItem("hb_screen",s);};
   const setGameId=id=>{setGameIdRaw(id);id?localStorage.setItem("hb_gameId",id):localStorage.removeItem("hb_gameId");};
@@ -799,7 +951,10 @@ export default function BoardGame({user}){
     if(!pid)return;
     const fr=ref(db,`users/${pid}/friends`);onValue(fr,s=>setFriends(Object.values(s.val()||{})));
     const ir=ref(db,`users/${pid}/gameInvites`);onValue(ir,s=>setInvites(Object.values(s.val()||{})));
-    return()=>{off(fr);off(ir);};
+    // Load ELO
+    const eloRef=ref(db,`users/${pid}/profile/elo`);
+    onValue(eloRef,s=>{const v=s.val();if(typeof v==="number")setMyElo(v);});
+    return()=>{off(fr);off(ir);off(eloRef);};
   },[pid]);
 
   useEffect(()=>{
@@ -857,6 +1012,56 @@ export default function BoardGame({user}){
     }
     setScreen("lobby");setGameId(null);setGd(null);
     localStorage.removeItem("hb_screen");localStorage.removeItem("hb_gameId");
+  };
+
+  // Ranked queue
+  const joinRankedQueue=async()=>{
+    await set(ref(db,`ranked_queue/${pid}`),{name:pid,race:user?.race||"human",elo:myElo,joined:Date.now()});
+    setScreen("ranked_queue");
+    // Listen for matches
+    const mqRef=ref(db,`ranked_queue`);
+    queueRef.current=mqRef;
+    onValue(mqRef,async(snap)=>{
+      const q=snap.val()||{};
+      const entries=Object.values(q).filter(e=>e.name!==pid);
+      if(entries.length>0&&screenRef.current==="ranked_queue"){
+        // Find closest ELO match
+        entries.sort((a,b)=>Math.abs(a.elo-myElo)-Math.abs(b.elo-myElo));
+        const opp=entries[0];
+        // Lower-name player creates the game to avoid double-creation
+        if(pid<opp.name){
+          const id=genId();
+          const rankedGD={...newGD(),ranked:true,eloSnapshot:{[pid]:myElo,[opp.name]:opp.elo}};
+          rankedGD.players[opp.name]={name:opp.name,race:opp.race||"human",position:0,score:0,coins:50,cards:[],skipTurn:false,extraStep:0};
+          rankedGD.status="playing";
+          await set(ref(db,`games/${id}`),rankedGD);
+          // Notify both via ranked_match node
+          await set(ref(db,`ranked_match/${pid}`),{gameId:id,opponent:opp.name});
+          await set(ref(db,`ranked_match/${opp.name}`),{gameId:id,opponent:pid});
+          // Clean queue
+          await remove(ref(db,`ranked_queue/${pid}`));
+          await remove(ref(db,`ranked_queue/${opp.name}`));
+        }
+      }
+    });
+    // Listen for match assignment
+    const matchRef=ref(db,`ranked_match/${pid}`);
+    onValue(matchRef,async(snap)=>{
+      const m=snap.val();
+      if(m&&m.gameId){
+        off(mqRef);off(matchRef);
+        await remove(ref(db,`ranked_match/${pid}`));
+        setGameId(m.gameId);setScreen("playing");
+        notify(`Ranked meccs: ${m.opponent} ellen!`,"#B39DDB",3500);
+      }
+    });
+  };
+
+  const cancelRankedQueue=async()=>{
+    await remove(ref(db,`ranked_queue/${pid}`));
+    if(queueRef.current){off(queueRef.current);queueRef.current=null;}
+    const matchRef=ref(db,`ranked_match/${pid}`);off(matchRef);
+    setScreen("lobby");
   };
 
   const startGame=async()=>{await update(ref(db,`games/${gameId}`),{status:"playing"});setScreen("playing");};
@@ -929,8 +1134,8 @@ export default function BoardGame({user}){
     const upd={score};
     if(result.pts>0){burst("#66BB6A");notify(`+${result.pts} pont! ✨`,"#66BB6A");}
     else if(result.pts<0){burst("#E74C3C");notify(`${result.pts} pont...`,"#EF9A9A");}
-    // Earn coins each turn
-    upd.coins=coins+10+(result.pts>0?5:0);
+    // Earn coins each turn + encounter coins
+    upd.coins=coins+10+(result.pts>0?5:0)+(result.encounterCoins||0);
     if(result.field.t==="trap"){upd.skipTurn=true;upd.position=Math.max(0,(myData?.position||0)-2);}
     if(result.field.id===23)upd.position=Math.max(0,(myData?.position||0)-3);
     if(result.field.id===24){upd.score=Math.max(0,score-30);}
@@ -946,6 +1151,22 @@ export default function BoardGame({user}){
     if(result.field.id===FIELDS.length-1||result.win){
       await update(ref(db,`games/${gameId}/players/${pid}`),upd);
       await update(ref(db,`games/${gameId}`),{status:"finished",winner:pid});
+      // ELO update for ranked games
+      if(gd.ranked&&gd.eloSnapshot){
+        const opponents=Object.keys(gd.eloSnapshot).filter(n=>n!==pid);
+        let newElo=myElo;
+        for(const opp of opponents){
+          newElo=calcElo(newElo,gd.eloSnapshot[opp]||1000,1);
+        }
+        await update(ref(db,`users/${pid}/profile`),{elo:newElo});
+        // Update losers' ELO
+        for(const opp of opponents){
+          const oppElo=gd.eloSnapshot[opp]||1000;
+          const oppNewElo=calcElo(oppElo,gd.eloSnapshot[pid]||1000,0);
+          await update(ref(db,`users/${opp}/profile`),{elo:oppNewElo});
+        }
+        await update(ref(db,`games/${gameId}`),{eloResults:{[pid]:newElo,...Object.fromEntries(opponents.map(o=>[o,calcElo(gd.eloSnapshot[o]||1000,gd.eloSnapshot[pid]||1000,0)]))}});
+      }
       burst("#FFD700");setScreen("finished");return;
     }
     await update(ref(db,`games/${gameId}/players/${pid}`),upd);
@@ -978,9 +1199,11 @@ export default function BoardGame({user}){
   const myCoins=gd?.players?.[pid]?.coins||0;
 
   const resetGame=()=>{setScreen("lobby");setGameId(null);setGd(null);localStorage.removeItem("hb_screen");localStorage.removeItem("hb_gameId");};
+  const handleLeaveAndBack=async()=>{await leaveGame();if(onBack)onBack();};
 
-  if(screen==="lobby")return <LobbyScreen pid={pid} user={user} friends={friends} invites={invites} onCreateGame={createGame} onJoinGame={joinGame} onAcceptInvite={acceptInvite} onDeclineInvite={inv=>remove(ref(db,`users/${pid}/gameInvites/${inv.from}`))} onInviteFriend={inviteFriend} notif={notif}/>;
+  if(screen==="lobby")return <LobbyScreen pid={pid} user={user} friends={friends} invites={invites} onCreateGame={createGame} onJoinGame={joinGame} onAcceptInvite={acceptInvite} onDeclineInvite={inv=>remove(ref(db,`users/${pid}/gameInvites/${inv.from}`))} onInviteFriend={inviteFriend} onRankedQueue={joinRankedQueue} myElo={myElo} notif={notif} onBack={onBack}/>;
+  if(screen==="ranked_queue")return <RankedQueueScreen pid={pid} user={user} myElo={myElo} onCancel={cancelRankedQueue} notif={notif}/>;
   if(screen==="waiting")return <WaitingScreen gameId={gameId} players={players} gameData={gd} friends={friends} pid={pid} onStart={startGame} onInviteFriend={n=>inviteFriend(n,gameId)} onLeave={leaveGame} notif={notif}/>;
-  if(screen==="finished")return <FinishedScreen players={players} gameData={gd} pid={pid} onNewGame={resetGame}/>;
-  return <PlayingScreen gd={gd} pid={pid} user={user} gameId={gameId} onRoll={rollDice} onEventResult={handleEvent} eventField={eventField} rolling={rolling} diceVals={diceVals} bursts={bursts} notif={notif} coins={myCoins} onBuyItem={buyItem} centerDice={centerDice}/>;
+  if(screen==="finished")return <FinishedScreen players={players} gameData={gd} pid={pid} onNewGame={resetGame} onBack={()=>{resetGame();if(onBack)onBack();}}/>;
+  return <PlayingScreen gd={gd} pid={pid} user={user} gameId={gameId} onRoll={rollDice} onEventResult={handleEvent} eventField={eventField} rolling={rolling} diceVals={diceVals} bursts={bursts} notif={notif} coins={myCoins} onBuyItem={buyItem} centerDice={centerDice} onLeave={handleLeaveAndBack}/>;
 }
