@@ -1397,6 +1397,65 @@ const SHOP_ITEMS=[
   {id:"effect_fire",type:"effect",name:"Tűz Effekt",icon:"🔥",desc:"Tüzes lángok az avatárod körül",cost:900,effectId:"fire"},
 ];
 
+// ── LOOT CRATES ─────────────────────────────────────────────────────────────
+const CRATE_TYPES=[
+  {id:"wood",name:"Fa Láda",icon:"📦",color:"#8B6914",glow:"rgba(139,105,20,.4)",
+    drops:[
+      {type:"pts",min:50,max:200,chance:50,label:"Pont"},
+      {type:"pts",min:200,max:500,chance:20,label:"Sok Pont"},
+      {type:"elo",min:10,max:50,chance:15,label:"ELO Boost"},
+      {type:"crate_upgrade",to:"silver",chance:10,label:"🔄 Ezüst Ládává Fejlődik!"},
+      {type:"title",titleId:"lucky",title:"Szerencsés",chance:5,label:"🏅 \"Szerencsés\" cím"},
+    ]},
+  {id:"silver",name:"Ezüst Láda",icon:"🪙",color:"#A0A0C0",glow:"rgba(160,160,192,.4)",
+    drops:[
+      {type:"pts",min:200,max:600,chance:40,label:"Pont"},
+      {type:"pts",min:600,max:1200,chance:20,label:"Sok Pont"},
+      {type:"elo",min:30,max:100,chance:15,label:"ELO Boost"},
+      {type:"crate_upgrade",to:"gold",chance:10,label:"🔄 Arany Ládává Fejlődik!"},
+      {type:"frame",frameId:"silver_star",frameName:"Ezüst Csillag",chance:10,label:"✨ Ezüst Csillag Keret"},
+      {type:"title",titleId:"treasure_hunter",title:"Kincsvadász",chance:5,label:"🏅 \"Kincsvadász\" cím"},
+    ]},
+  {id:"gold",name:"Arany Láda",icon:"✨",color:"#FFD700",glow:"rgba(255,215,0,.4)",
+    drops:[
+      {type:"pts",min:500,max:1500,chance:35,label:"Pont"},
+      {type:"pts",min:1500,max:3000,chance:15,label:"Rengeteg Pont"},
+      {type:"elo",min:50,max:200,chance:15,label:"ELO Boost"},
+      {type:"crate_upgrade",to:"legendary",chance:8,label:"🔄 Legendás Ládává Fejlődik!"},
+      {type:"frame",frameId:"golden_crown",frameName:"Arany Korona",chance:12,label:"👑 Arany Korona Keret"},
+      {type:"title",titleId:"golden_one",title:"Az Aranyos",chance:8,label:"🏅 \"Az Aranyos\" cím"},
+      {type:"effect",effectId:"golden_sparkle",chance:7,label:"✨ Arany Csillogás Effekt"},
+    ]},
+  {id:"legendary",name:"Legendás Láda",icon:"🔮",color:"#B39DDB",glow:"rgba(179,157,219,.5)",
+    drops:[
+      {type:"pts",min:2000,max:5000,chance:30,label:"Tömérdek Pont"},
+      {type:"elo",min:100,max:500,chance:15,label:"Hatalmas ELO Boost"},
+      {type:"frame",frameId:"legendary_aura",frameName:"Legendás Aura",chance:15,label:"🌟 Legendás Aura Keret"},
+      {type:"title",titleId:"mythic",title:"Mítikus Hős",chance:12,label:"🏅 \"Mítikus Hős\" cím"},
+      {type:"effect",effectId:"legendary_flames",chance:10,label:"🔥 Legendás Lángok Effekt"},
+      {type:"pts",min:5000,max:10000,chance:8,label:"💰 JACKPOT Pont"},
+      {type:"elo",min:500,max:1000,chance:5,label:"⚡ MEGA ELO Boost"},
+      {type:"all_crates",count:3,crateType:"gold",chance:5,label:"📦×3 Három Arany Láda!"},
+    ]},
+];
+
+const _rollCrate=(crateType)=>{
+  const crate=CRATE_TYPES.find(c=>c.id===crateType);
+  if(!crate)return null;
+  const roll=Math.random()*100;
+  let cumulative=0;
+  for(const drop of crate.drops){
+    cumulative+=drop.chance;
+    if(roll<cumulative){
+      const result={...drop};
+      if(drop.type==="pts")result.amount=Math.floor(drop.min+Math.random()*(drop.max-drop.min));
+      if(drop.type==="elo")result.amount=Math.floor(drop.min+Math.random()*(drop.max-drop.min));
+      return result;
+    }
+  }
+  return crate.drops[0]; // fallback
+};
+
 // ── VOTE TASKS (weekly featured) ───────────────────────────────────────────
 const VOTE_OPTIONS=[
   {id:"v1",icon:"🗡️",name:"Harcos Hét",desc:"Minden feladatért dupla pont!",multiplier:2,taskBonus:"all"},
@@ -2107,6 +2166,50 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
   // ── SHOP STATE ──
   const [purchased,setPurchased]=useState(()=>{try{return JSON.parse(localStorage.getItem("hobbit_shop_purchased")||"[]");}catch{return[];}});
   const [shopMsg,setShopMsg]=useState(null);
+  // ── CRATES STATE ──
+  const [myCrates,setMyCrates]=useState(()=>{try{return JSON.parse(localStorage.getItem("hobbit_crates")||"[]");}catch{return[];}});
+  const [crateOpening,setCrateOpening]=useState(null); // {crateType,phase:"rolling"|"reveal",result}
+  const [crateHistory,setCrateHistory]=useState(()=>{try{return JSON.parse(localStorage.getItem("hobbit_crate_history")||"[]");}catch{return[];}});
+  const saveCrates=(crates)=>{setMyCrates(crates);localStorage.setItem("hobbit_crates",JSON.stringify(crates));};
+  const addCrate=(type)=>{const next=[...myCrates,{id:Date.now()+"_"+Math.random().toString(36).slice(2,6),type,earned:Date.now()}];saveCrates(next);};
+  const openCrate=(crateId)=>{
+    const crate=myCrates.find(c=>c.id===crateId);if(!crate||crateOpening)return;
+    const result=_rollCrate(crate.type);if(!result)return;
+    sfx.dice?.();
+    setCrateOpening({crateType:crate.type,phase:"rolling",result});
+    // Remove from inventory
+    saveCrates(myCrates.filter(c=>c.id!==crateId));
+    // Rolling animation → reveal
+    setTimeout(()=>{
+      setCrateOpening(prev=>prev?{...prev,phase:"reveal"}:null);
+      sfx.achievement?.();
+      // Apply reward
+      if(result.type==="pts"&&result.amount)onAddScore?.("crate_"+Date.now(),result.amount);
+      if(result.type==="elo"&&result.amount){
+        try{const {getDatabase,ref:fbRef,get:fbGet,set:fbSet}=window.__fbDB||{};if(getDatabase){const db=getDatabase();fbGet(fbRef(db,`users/${myName}/profile/elo`)).then(s=>{const cur=s.val()||1000;fbSet(fbRef(db,`users/${myName}/profile/elo`),cur+result.amount);});}}catch(e){}
+      }
+      if(result.type==="crate_upgrade")addCrate(result.to);
+      if(result.type==="all_crates"){for(let i=0;i<(result.count||1);i++)addCrate(result.crateType||"gold");}
+      // Save to history
+      const entry={...result,crateType:crate.type,time:Date.now()};
+      const hist=[entry,...crateHistory].slice(0,20);
+      setCrateHistory(hist);localStorage.setItem("hobbit_crate_history",JSON.stringify(hist));
+    },1800);
+  };
+  // Earn crates from task completions (check on mount)
+  useEffect(()=>{
+    const lastCrateCheck=parseInt(localStorage.getItem("hobbit_crate_check")||"0");
+    const tasksSinceLast=completed.filter(t=>!localStorage.getItem(`hobbit_crate_earned_${t}`));
+    if(tasksSinceLast.length>0&&Date.now()-lastCrateCheck>60000){
+      tasksSinceLast.forEach(t=>{
+        const roll=Math.random();
+        const type=roll<0.02?"legendary":roll<0.08?"gold":roll<0.25?"silver":"wood";
+        addCrate(type);localStorage.setItem(`hobbit_crate_earned_${t}`,"1");
+      });
+      localStorage.setItem("hobbit_crate_check",String(Date.now()));
+    }
+  },[]);
+
   const buyItem=(item)=>{
     if(purchased.includes(item.id)){setShopMsg({ok:false,t:"Már megvan!"});setTimeout(()=>setShopMsg(null),1500);return;}
     if(totalScore<item.cost){setShopMsg({ok:false,t:`Nincs elég pontod! (${totalScore}/${item.cost})`});setTimeout(()=>setShopMsg(null),2000);return;}
@@ -2168,7 +2271,7 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
     }catch(e){setDuelMsg({ok:false,t:"Hiba történt!"});}
   };
 
-  const TABS2=[{id:"stats",label:"Statok",icon:"📊"},{id:"story",label:"Történet",icon:"📜"},{id:"shop",label:"Bolt",icon:"🏪"},{id:"friends",label:"Barátok",icon:"⚔️"},{id:"clan",label:"Klán",icon:"🛡️"},{id:"leaderboard",label:"Ranglétra",icon:"🏆"},{id:"daily",label:"Napi",icon:"☀️"},{id:"vote",label:"Szavazás",icon:"🗳️"},...(activeSeason?[{id:"season",label:activeSeason.name,icon:activeSeason.icon}]:[])];
+  const TABS2=[{id:"stats",label:"Statok",icon:"📊"},{id:"story",label:"Történet",icon:"📜"},{id:"shop",label:"Bolt",icon:"🏪"},{id:"crates",label:"Ládák",icon:"📦"},{id:"friends",label:"Barátok",icon:"⚔️"},{id:"clan",label:"Klán",icon:"🛡️"},{id:"leaderboard",label:"Ranglétra",icon:"🏆"},{id:"daily",label:"Napi",icon:"☀️"},{id:"vote",label:"Szavazás",icon:"🗳️"},...(activeSeason?[{id:"season",label:activeSeason.name,icon:activeSeason.icon}]:[])];
 
   return <div style={{flex:1,display:"flex",flexDirection:"column",minHeight:0,overflowY:"auto"}}>
     {/* Header */}
@@ -2838,6 +2941,71 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
           </div>
         </div>;
       })}
+    </div>}
+
+    {/* CRATES */}
+    {tab==="crates"&&<div style={{padding:"14px 12px",display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{textAlign:"center",padding:"16px",background:"linear-gradient(135deg,rgba(139,105,20,.08),rgba(201,168,76,.04))",border:"1px solid rgba(139,105,20,.25)"}}>
+        <div style={{fontSize:"2rem",marginBottom:6}}>📦</div>
+        <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1rem",color:"var(--gold)",letterSpacing:".1em"}}>Zsákmányládák</div>
+        <div style={{fontFamily:"'EB Garamond',serif",fontSize:".82rem",color:"var(--td)",fontStyle:"italic",marginTop:4}}>Feladatok teljesítéséből ládákat kapsz — nyisd ki és nézd meg mit rejtenek!</div>
+        <div style={{fontFamily:"'Cinzel',serif",fontSize:".52rem",color:"var(--gm)",marginTop:6,letterSpacing:".08em"}}>{myCrates.length} láda a raktárban</div>
+      </div>
+
+      {/* Crate opening overlay */}
+      {crateOpening&&<div style={{padding:"20px",background:"rgba(0,0,0,.4)",border:`2px solid ${(CRATE_TYPES.find(c=>c.id===crateOpening.crateType)||CRATE_TYPES[0]).color}`,textAlign:"center",animation:"zoomIn .3s ease"}}>
+        {crateOpening.phase==="rolling"?<>
+          <div style={{fontSize:"3rem",animation:"diceGlowPulse 1s ease infinite"}}>{(CRATE_TYPES.find(c=>c.id===crateOpening.crateType)||CRATE_TYPES[0]).icon}</div>
+          <div style={{fontFamily:"'Cinzel',serif",fontSize:".9rem",color:"var(--gold)",marginTop:8,letterSpacing:".12em",animation:"gP 1s ease infinite"}}>Nyitás...</div>
+        </>:<>
+          <div style={{fontSize:"2.5rem",marginBottom:6,animation:"popIn .5s ease"}}>{crateOpening.result.type==="pts"?"💰":crateOpening.result.type==="elo"?"⚡":crateOpening.result.type==="crate_upgrade"?"🔄":crateOpening.result.type==="title"?"🏅":crateOpening.result.type==="frame"?"✨":crateOpening.result.type==="effect"?"🔥":crateOpening.result.type==="all_crates"?"📦":"🎁"}</div>
+          <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".9rem",color:(CRATE_TYPES.find(c=>c.id===crateOpening.crateType)||CRATE_TYPES[0]).color,letterSpacing:".1em"}}>{crateOpening.result.label}</div>
+          {crateOpening.result.amount&&<div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.3rem",color:"var(--gold)",marginTop:6}}>+{crateOpening.result.amount.toLocaleString()}</div>}
+          <button onClick={()=>setCrateOpening(null)} style={{marginTop:12,padding:"8px 20px",background:"none",border:"1px solid rgba(201,168,76,.3)",color:"var(--gold)",fontFamily:"'Cinzel',serif",fontSize:".65rem",cursor:"pointer",letterSpacing:".1em"}}>Rendben</button>
+        </>}
+      </div>}
+
+      {/* Drop rate info */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
+        {CRATE_TYPES.map(ct=><div key={ct.id} style={{padding:"8px 4px",background:`${ct.color}08`,border:`1px solid ${ct.color}33`,borderRadius:4,textAlign:"center"}}>
+          <div style={{fontSize:"1.3rem"}}>{ct.icon}</div>
+          <div style={{fontFamily:"'Cinzel',serif",fontSize:".48rem",color:ct.color,marginTop:2,letterSpacing:".06em"}}>{ct.name}</div>
+          <div style={{fontFamily:"'Cinzel',serif",fontSize:".4rem",color:"var(--gm)",marginTop:2}}>{ct.drops.length} jutalom</div>
+        </div>)}
+      </div>
+
+      {/* My crates inventory */}
+      {myCrates.length===0?<div style={{textAlign:"center",padding:"20px",opacity:.5}}>
+        <div style={{fontSize:"2rem",marginBottom:6}}>🔒</div>
+        <div style={{fontFamily:"'Cinzel',serif",fontSize:".72rem",color:"var(--gm)"}}>Nincsenek ládáid. Teljesíts feladatokat, hogy kapj!</div>
+      </div>
+      :<div style={{display:"flex",flexDirection:"column",gap:8}}>
+        <div style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",letterSpacing:".14em",color:"var(--gm)",textTransform:"uppercase"}}>— Raktár ({myCrates.length}) —</div>
+        {myCrates.map(c=>{
+          const ct=CRATE_TYPES.find(t=>t.id===c.type)||CRATE_TYPES[0];
+          return <div key={c.id} style={{padding:"12px 14px",background:`${ct.color}06`,border:`1px solid ${ct.color}33`,borderRadius:4,display:"flex",alignItems:"center",gap:12,transition:"all .3s"}}>
+            <span style={{fontSize:"1.8rem",filter:`drop-shadow(0 0 8px ${ct.glow})`,flexShrink:0}}>{ct.icon}</span>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontFamily:"'Cinzel',serif",fontSize:".75rem",color:ct.color}}>{ct.name}</div>
+              <div style={{fontFamily:"'Cinzel',serif",fontSize:".45rem",color:"var(--gm)",marginTop:2}}>Kapva: {new Date(c.earned).toLocaleDateString("hu-HU")}</div>
+            </div>
+            <button onClick={()=>openCrate(c.id)} disabled={!!crateOpening} style={{padding:"8px 16px",background:`${ct.color}15`,border:`1px solid ${ct.color}66`,color:ct.color,fontFamily:"'Cinzel',serif",fontSize:".65rem",letterSpacing:".1em",cursor:crateOpening?"default":"pointer",textTransform:"uppercase",borderRadius:3,opacity:crateOpening?.5:1}}>Nyitás 🔓</button>
+          </div>;
+        })}
+      </div>}
+
+      {/* History */}
+      {crateHistory.length>0&&<div>
+        <div style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",letterSpacing:".14em",color:"var(--gm)",textTransform:"uppercase",marginBottom:6}}>— Előzmények —</div>
+        {crateHistory.slice(0,10).map((h,i)=>{
+          const ct=CRATE_TYPES.find(t=>t.id===h.crateType)||CRATE_TYPES[0];
+          return <div key={i} style={{padding:"6px 10px",display:"flex",alignItems:"center",gap:8,borderBottom:"1px solid rgba(201,168,76,.06)"}}>
+            <span style={{fontSize:".9rem"}}>{ct.icon}</span>
+            <span style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",color:ct.color,flex:1}}>{h.label}{h.amount?` (+${h.amount.toLocaleString()})`:""}</span>
+            <span style={{fontFamily:"'Cinzel',serif",fontSize:".42rem",color:"var(--gm)"}}>{new Date(h.time).toLocaleDateString("hu-HU")}</span>
+          </div>;
+        })}
+      </div>}
     </div>}
 
     {/* VOTE */}
