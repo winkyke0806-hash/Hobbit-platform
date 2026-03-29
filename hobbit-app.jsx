@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { initializeApp, getApps } from "firebase/app";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged, signOut } from "firebase/auth";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { getDatabase, ref, set, get, update } from "firebase/database";
 
 const FB={apiKey:import.meta.env.VITE_FIREBASE_API_KEY,authDomain:import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,projectId:import.meta.env.VITE_FIREBASE_PROJECT_ID,databaseURL:import.meta.env.VITE_FIREBASE_DATABASE_URL};
 const _app=getApps().length?getApps()[0]:initializeApp(FB);
 const auth=getAuth(_app);
 const fbDb=getDatabase(_app);
+const googleProvider=new GoogleAuthProvider();
 
 export {auth,fbDb};
 
@@ -182,8 +183,100 @@ export default function HobbitApp({onLogin}) {
 }
 
 // ─── AUTH SCREEN ──────────────────────────────────────────────────────────────
+function GoogleCompleteForm({googleUser, onSuccess}) {
+  const [form, setForm] = useState({adventureName:"", race:""});
+  const [errors, setErrors] = useState({});
+  const [globalErr, setGE] = useState("");
+  const [loading, setLoading] = useState(false);
+  const upd = (k,v) => { setForm(f=>({...f,[k]:v})); setErrors(e=>({...e,[k]:""})); setGE(""); };
+
+  const submit = async () => {
+    const e = {};
+    if(!form.adventureName.trim()) e.adventureName="Kalandorneved nélkül nem léphetsz Középföldére!";
+    else if(form.adventureName.length<3) e.adventureName="Legalább 3 betű kell a névhez!";
+    if(!form.race) e.race="Válassz fajt!";
+    if(Object.keys(e).length){setErrors(e);return;}
+    setLoading(true);
+    try {
+      const nameSnap = await get(ref(fbDb, `users/${form.adventureName}/profile`));
+      if(nameSnap.exists()){setGE("Ez a kalandornév már foglalt!");setLoading(false);return;}
+      const user = {adventureName:form.adventureName, realName:googleUser.realName, email:googleUser.email, race:form.race, joinedAt:new Date().toISOString(), score:0, elo:1000, uid:googleUser.uid};
+      await set(ref(fbDb, `users/${form.adventureName}/profile`), user);
+      await set(ref(fbDb, `auth_map/${googleUser.uid}`), {adventureName:form.adventureName});
+      localStorage.setItem("hobbit_current", JSON.stringify(user));
+      onSuccess(user);
+    } catch(err) {
+      console.error("Google complete error:",err);
+      setGE(`Hiba történt: ${err.code||err.message}`);setLoading(false);
+    }
+  };
+
+  const race = RACES.find(r=>r.id===form.race);
+  return <div className="form-wrap">
+    <div className="form-title"><span className="form-rune">ᚠ</span>Üdv, {googleUser.realName||"kalandor"}!</div>
+    <div style={{fontSize:".8rem",color:"var(--text-dim)",fontStyle:"italic",fontFamily:"'EB Garamond',serif",textAlign:"center",marginBottom:12}}>Adj magadnak egy kalandornevet és válassz fajt!</div>
+    {globalErr && <Err msg={globalErr}/>}
+    <div className="fields">
+      <Field label="Kalandornév" icon="⚔️" error={errors.adventureName} hint="Ez lesz a neved Középföldén">
+        <div className="iw">
+          <input className={`inp${errors.adventureName?" inp-e":""}`} placeholder="Pl.: Bilbo Zsákos" value={form.adventureName} onChange={e=>upd("adventureName",e.target.value)} maxLength={24}/>
+          {form.adventureName.length>=3&&!errors.adventureName&&<span className="icheck">✓</span>}
+        </div>
+      </Field>
+    </div>
+    <Err msg={errors.race}/>
+    <div className="race-grid" style={{marginTop:8}}>
+      {RACES.map(r=>(
+        <button key={r.id} className={`race-card${form.race===r.id?" race-on":""}`}
+          style={{"--rc":r.color,"--rg":r.glow}} onClick={()=>upd("race",r.id)}>
+          <div className="rc-rune-bg">{r.rune}</div>
+          <span className="rc-icon">{r.icon}</span>
+          <span className="rc-name">{r.label}</span>
+          {form.race===r.id&&<div className="rc-ring"/>}
+        </button>
+      ))}
+    </div>
+    {race&&<div className="race-detail" style={{"--rc":race.color,"--rg":race.glow,marginTop:8}}>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <span style={{fontSize:"1.5rem"}}>{race.icon}</span>
+        <div>
+          <div style={{fontFamily:"'Cinzel',serif",fontSize:".75rem",color:"var(--gold)",letterSpacing:".06em",textTransform:"uppercase"}}>{race.title}</div>
+          <p style={{fontStyle:"italic",color:"var(--text-dim)",fontSize:".8rem",lineHeight:1.5,margin:0}}>{race.desc}</p>
+        </div>
+      </div>
+    </div>}
+    <button className={`btn-submit${loading?" btn-loading":""}`} onClick={submit} disabled={loading} style={{marginTop:14}}>
+      {loading?"✦ Fiók létrehozás... ✦":"⚔️  Kaland Kezdete"}
+    </button>
+  </div>;
+}
+
 function AuthScreen({onSuccess}) {
   const [tab, setTab] = useState("login");
+  const [googleUser, setGoogleUser] = useState(null);
+  const [googleErr, setGoogleErr] = useState("");
+
+  const handleGoogle = async () => {
+    setGoogleErr("");
+    try {
+      const cred = await signInWithPopup(auth, googleProvider);
+      const uid = cred.user.uid;
+      const mapSnap = await get(ref(fbDb, `auth_map/${uid}`));
+      if(mapSnap.exists()){
+        const name = mapSnap.val().adventureName;
+        const profSnap = await get(ref(fbDb, `users/${name}/profile`));
+        const user = {...(profSnap.val()||{}), adventureName:name, uid};
+        localStorage.setItem("hobbit_current", JSON.stringify(user));
+        onSuccess(user);
+      } else {
+        setGoogleUser({uid, email:cred.user.email||"", realName:cred.user.displayName||""});
+      }
+    } catch(err) {
+      console.error("Google sign-in error:", err.code, err.message);
+      if(err.code!=="auth/popup-closed-by-user") setGoogleErr(`Google hiba: ${err.code||err.message}`);
+    }
+  };
+
   return (
     <div className="page">
       <div className="card">
@@ -199,23 +292,45 @@ function AuthScreen({onSuccess}) {
           <RuneStrip offset={6}/>
         </div>
 
-        {/* Tabs */}
-        <div className="tabs">
-          <button className={`tab-btn ${tab==="login"?"tab-on":""}`} onClick={()=>setTab("login")}>
-            <span className="tab-rune">ᚱ</span>Bejelentkezés
-          </button>
-          <button className={`tab-btn ${tab==="register"?"tab-on":""}`} onClick={()=>setTab("register")}>
-            <span className="tab-rune">ᚠ</span>Regisztráció
-          </button>
-        </div>
+        {googleUser ? (
+          <div className="card-body tab-anim">
+            <GoogleCompleteForm googleUser={googleUser} onSuccess={onSuccess}/>
+          </div>
+        ) : (<>
+          {/* Tabs */}
+          <div className="tabs">
+            <button className={`tab-btn ${tab==="login"?"tab-on":""}`} onClick={()=>setTab("login")}>
+              <span className="tab-rune">ᚱ</span>Bejelentkezés
+            </button>
+            <button className={`tab-btn ${tab==="register"?"tab-on":""}`} onClick={()=>setTab("register")}>
+              <span className="tab-rune">ᚠ</span>Regisztráció
+            </button>
+          </div>
 
-        {/* Body */}
-        <div key={tab} className="card-body tab-anim">
-          {tab === "login"
-            ? <LoginForm    onSuccess={onSuccess} onSwitch={()=>setTab("register")}/>
-            : <RegisterForm onSuccess={onSuccess} onSwitch={()=>setTab("login")}/>
-          }
-        </div>
+          {/* Body */}
+          <div key={tab} className="card-body tab-anim">
+            {tab === "login"
+              ? <LoginForm    onSuccess={onSuccess} onSwitch={()=>setTab("register")}/>
+              : <RegisterForm onSuccess={onSuccess} onSwitch={()=>setTab("login")}/>
+            }
+          </div>
+
+          {/* Google Sign-in */}
+          <div style={{padding:"0 20px 20px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,margin:"4px 0 14px"}}>
+              <div style={{flex:1,height:1,background:"rgba(201,168,76,.15)"}}/>
+              <span style={{fontFamily:"'Cinzel',serif",fontSize:".6rem",color:"rgba(201,168,76,.35)",letterSpacing:".1em"}}>VAGY</span>
+              <div style={{flex:1,height:1,background:"rgba(201,168,76,.15)"}}/>
+            </div>
+            <button onClick={handleGoogle} style={{width:"100%",padding:"11px 16px",background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.12)",color:"var(--text)",fontFamily:"'Cinzel',serif",fontSize:".78rem",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:10,transition:"all .2s",letterSpacing:".04em"}}
+              onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,.08)"}
+              onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,.04)"}>
+              <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#4285F4" d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.3-.2-2.7-.5-4z"/><path fill="#34A853" d="M6.3 14.7l7 5.1C15 16.2 19.1 13 24 13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 16.3 2 9.7 7.3 6.3 14.7z"/><path fill="#FBBC05" d="M24 46c5.4 0 10.3-1.8 14.1-5l-6.9-5.5C29.3 37 26.8 38 24 38c-6 0-10.6-3.9-12.3-9.2l-7 5.4C8 41.4 15.4 46 24 46z"/><path fill="#EA4335" d="M44.5 20H24v8.5h11.8c-.9 3-3 5.5-5.8 7l6.9 5.5C40.7 37.5 46 31 46 24c0-1.3-.2-2.7-.5-4z"/></svg>
+              Belépés Google-lel
+            </button>
+            {googleErr&&<Err msg={googleErr}/>}
+          </div>
+        </>)}
       </div>
     </div>
   );
@@ -251,11 +366,12 @@ function LoginForm({onSuccess, onSwitch}) {
       localStorage.setItem("hobbit_current", JSON.stringify(user));
       onSuccess(user);
     } catch (err) {
+      console.error("Login error:", err.code, err.message);
       const msg = err.code === "auth/invalid-credential" || err.code === "auth/wrong-password" || err.code === "auth/user-not-found"
         ? "Hibás email vagy jelszó — próbáld újra, kalandor!"
         : err.code === "auth/too-many-requests"
         ? "Túl sok próbálkozás — várj egy kicsit!"
-        : "Hiba történt a bejelentkezéskor.";
+        : `Hiba történt: ${err.code || err.message}`;
       setGE(msg); setLoading(false);
     }
   };
@@ -372,11 +488,14 @@ function RegisterForm({onSuccess, onSwitch}) {
       localStorage.setItem("hobbit_current", JSON.stringify(user));
       onSuccess(user);
     } catch (err) {
+      console.error("Register error:", err.code, err.message);
       const msg = err.code === "auth/email-already-in-use"
         ? "Ez az email cím már foglalt — talán már kalandoz valaki?"
         : err.code === "auth/weak-password"
         ? "A jelszó túl gyenge — legalább 6 karakter kell!"
-        : "Hiba történt a regisztráció során.";
+        : err.code === "auth/operation-not-allowed"
+        ? "Az Email/Password bejelentkezés nincs engedélyezve a Firebase konzolban!"
+        : `Hiba történt: ${err.code || err.message}`;
       setGE(msg); setStep(0); setFinishing(false);
     }
   };
