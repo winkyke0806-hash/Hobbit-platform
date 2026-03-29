@@ -1395,6 +1395,13 @@ const SHOP_ITEMS=[
   {id:"bg_rivendell",type:"background",name:"Völgyzugoly Háttér",icon:"🏞️",desc:"Völgyzugoly nyugodt vízesései",cost:500,bgId:"rivendell"},
   {id:"effect_sparkle",type:"effect",name:"Csillogás Effekt",icon:"✨",desc:"Avatárod csillogó részecskéket szór",cost:700,effectId:"sparkle"},
   {id:"effect_fire",type:"effect",name:"Tűz Effekt",icon:"🔥",desc:"Tüzes lángok az avatárod körül",cost:900,effectId:"fire"},
+  // Cases (repeatable purchase → gives star drop)
+  {id:"case_megye",type:"case",name:"Megyei Láda",icon:"📦",desc:"Egy alap Csillagzsákmány. Általában közönséges, de ki tudja...",cost:500,repeatable:true,drops:1},
+  {id:"case_rivendell",type:"case",name:"Rivendelli Szekrény",icon:"🪙",desc:"Jobb esélyek! A tündék bölcsessége segít.",cost:1500,repeatable:true,drops:2},
+  {id:"case_erebor",type:"case",name:"Erebor Kincsesláda",icon:"💎",desc:"Smaug személyes gyűjteményéből. Prémium jutalmak garantálva.",cost:4000,repeatable:true,drops:3,bonusRarity:1},
+  {id:"case_mithril",type:"case",name:"Mithril Szekrény",icon:"⚜️",desc:"A legritkább anyagból készült. Minimum Ritka ritkaság garantált!",cost:10000,repeatable:true,drops:3,bonusRarity:2},
+  {id:"case_silmaril",type:"case",name:"Szilmaril Kapszula",icon:"🌟",desc:"A Szilmarilok fényével töltve. Minimum Epikus! Legendás esély kiugró.",cost:25000,repeatable:true,drops:5,bonusRarity:3},
+  {id:"case_valar",type:"case",name:"Valák Áldása",icon:"👑",desc:"Az istenek ajándéka. 10 zsákmány, MIND minimum Ritka. Legendás esély: 30%.",cost:75000,repeatable:true,drops:10,bonusRarity:2},
 ];
 
 // ── STAR DROPS (Brawl Stars style) ──────────────────────────────────────────
@@ -2155,10 +2162,10 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
     if(dropAnim)return;
     const drop=starDrops.find(d=>d.id===dropId);if(!drop)return;
     saveDrops(starDrops.filter(d=>d.id!==dropId));
-    // Determine rarity with upgrade chain
-    let rarity=0; // start common
+    // Determine rarity with upgrade chain (bonusRarity = guaranteed minimum tier)
+    const startRarity=Math.min(drop.bonusRarity||0,STAR_RARITIES.length-1);
     sfx.click?.();
-    setDropAnim({phase:"upgrading",rarity:0,finalRarity:0,reward:null,spinIdx:0,spinItems:[]});
+    setDropAnim({phase:"upgrading",rarity:startRarity,finalRarity:0,reward:null,spinIdx:0,spinItems:[]});
     // Upgrade chain with delays
     const tryUpgrade=(currentRarity,delay)=>{
       setTimeout(()=>{
@@ -2208,7 +2215,7 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
         }
       },delay);
     };
-    tryUpgrade(0,600);
+    tryUpgrade(startRarity,600);
   };
 
   // Earn star drops from task completions
@@ -2221,14 +2228,28 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
   },[]);
 
   const buyItem=(item)=>{
-    if(purchased.includes(item.id)){setShopMsg({ok:false,t:"Már megvan!"});setTimeout(()=>setShopMsg(null),1500);return;}
+    if(!item.repeatable&&purchased.includes(item.id)){setShopMsg({ok:false,t:"Már megvan!"});setTimeout(()=>setShopMsg(null),1500);return;}
     if(totalScore<item.cost){setShopMsg({ok:false,t:`Nincs elég pontod! (${totalScore}/${item.cost})`});setTimeout(()=>setShopMsg(null),2000);return;}
-    const next=[...purchased,item.id];
-    setPurchased(next);
-    localStorage.setItem("hobbit_shop_purchased",JSON.stringify(next));
+    // Deduct points
+    onAddScore?.("shop_buy_"+Date.now(),-item.cost);
     sfx.coin?.();
-    setShopMsg({ok:true,t:`"${item.name}" megvásárolva! 🎉`});
-    setTimeout(()=>setShopMsg(null),2000);
+    if(item.type==="case"){
+      // Give star drops
+      let latest=starDrops;
+      for(let i=0;i<(item.drops||1);i++){
+        const d={id:Date.now()+"_"+i+"_"+Math.random().toString(36).slice(2,6),earned:Date.now(),bonusRarity:item.bonusRarity||0};
+        latest=[...latest,d];
+      }
+      saveDrops(latest);
+      setShopMsg({ok:true,t:`${item.drops||1}× Csillagzsákmány hozzáadva! ⭐`});
+      setTimeout(()=>setShopMsg(null),2500);
+    }else{
+      const next=[...purchased,item.id];
+      setPurchased(next);
+      localStorage.setItem("hobbit_shop_purchased",JSON.stringify(next));
+      setShopMsg({ok:true,t:`"${item.name}" megvásárolva! 🎉`});
+      setTimeout(()=>setShopMsg(null),2000);
+    }
   };
 
   // ── VOTING STATE ──
@@ -2928,6 +2949,29 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
       </div>
       {shopMsg&&<div style={{padding:"8px 12px",background:shopMsg.ok?"rgba(102,187,106,.08)":"rgba(229,57,53,.08)",border:`1px solid ${shopMsg.ok?"rgba(102,187,106,.3)":"rgba(229,57,53,.3)"}`,color:shopMsg.ok?"#66BB6A":"#EF9A9A",fontFamily:"'EB Garamond',serif",fontSize:".85rem",textAlign:"center"}}>{shopMsg.t}</div>}
       {/* Group by type */}
+      {/* ── Cases ── */}
+      <div>
+        <div style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",letterSpacing:".14em",color:"var(--gm)",textTransform:"uppercase",marginBottom:8}}>— 📦 Ládák —</div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {SHOP_ITEMS.filter(i=>i.type==="case").map(item=>{
+            const canAfford=totalScore>=item.cost;
+            const rarityLabel=item.bonusRarity?`Min. ${STAR_RARITIES[Math.min(item.bonusRarity,STAR_RARITIES.length-1)].name}`:"";
+            return <div key={item.id} style={{padding:"12px 14px",background:"rgba(179,157,219,.04)",border:"1px solid rgba(179,157,219,.15)",borderRadius:4,display:"flex",alignItems:"center",gap:12}}>
+              <span style={{fontSize:"1.5rem",flexShrink:0}}>{item.icon}</span>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontFamily:"'Cinzel',serif",fontSize:".72rem",color:"var(--text)"}}>{item.name}</div>
+                <div style={{fontFamily:"'EB Garamond',serif",fontSize:".75rem",color:"var(--gm)",fontStyle:"italic"}}>{item.desc}</div>
+                <div style={{fontFamily:"'Cinzel',serif",fontSize:".48rem",color:"var(--td)",marginTop:3,display:"flex",gap:8}}>
+                  <span>⭐ ×{item.drops}</span>
+                  {rarityLabel&&<span style={{color:STAR_RARITIES[Math.min(item.bonusRarity,STAR_RARITIES.length-1)].color}}>{rarityLabel}</span>}
+                </div>
+              </div>
+              <button onClick={()=>buyItem(item)} style={{padding:"6px 14px",background:canAfford?"rgba(179,157,219,.1)":"rgba(0,0,0,.2)",border:`1px solid ${canAfford?"rgba(179,157,219,.35)":"rgba(255,255,255,.06)"}`,color:canAfford?"#B39DDB":"var(--gm)",fontFamily:"'Cinzel',serif",fontSize:".58rem",cursor:canAfford?"pointer":"not-allowed",borderRadius:3,flexShrink:0,whiteSpace:"nowrap",opacity:canAfford?1:.5}}>💰 {item.cost.toLocaleString()}pt</button>
+            </div>;
+          })}
+        </div>
+      </div>
+      {/* ── Regular items ── */}
       {[{type:"frame",label:"Keretek",icon:"🖼️"},{type:"title",label:"Címek",icon:"📛"},{type:"background",label:"Hátterek",icon:"🌄"},{type:"effect",label:"Effektek",icon:"✨"}].map(cat=>{
         const items=SHOP_ITEMS.filter(i=>i.type===cat.type);
         return <div key={cat.type}>
