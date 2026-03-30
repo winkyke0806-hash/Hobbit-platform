@@ -1564,6 +1564,414 @@ function DuelMode({onBack}){
   return null;
 }
 
+// ── SLOT MACHINE — Középföld Villám (Coin UP: Lightning style) ──────────────
+const SLOT_SYMBOLS=[
+  {id:"ring",icon:"💍",name:"Gyűrű",value:50,color:"#FFD700"},
+  {id:"sword",icon:"⚔️",name:"Kard",value:20,color:"#A0A0C0"},
+  {id:"gem",icon:"💎",name:"Drágakő",value:15,color:"#4DADE2"},
+  {id:"shield",icon:"🛡️",name:"Pajzs",value:10,color:"#A0522D"},
+  {id:"potion",icon:"🧪",name:"Bájital",value:8,color:"#66BB6A"},
+  {id:"scroll",icon:"📜",name:"Tekercs",value:5,color:"#C9A84C"},
+  {id:"coin",icon:"🪙",name:"Érme",value:3,color:"#E8C96A"},
+  {id:"rune",icon:"ᚠ",name:"Rúna",value:2,color:"#7A4ABB"},
+];
+const SLOT_JACKPOTS=[
+  {id:"mini",name:"Mini",mult:10,color:"#A0A0C0",icon:"⚡"},
+  {id:"minor",name:"Minor",mult:25,color:"#4DADE2",icon:"⚡⚡"},
+  {id:"major",name:"Major",mult:75,color:"#B39DDB",icon:"⚡⚡⚡"},
+  {id:"grand",name:"GRAND",mult:500,color:"#FFD700",icon:"🌩️"},
+];
+const SLOT_BOOSTERS=[
+  {id:"coin_up",name:"Coin Up",icon:"⬆️",desc:"Oszlop értékek ×2",color:"#4DADE2"},
+  {id:"multi_up",name:"Multi Up",icon:"✖️",desc:"Oszlop szorzó ×2-5",color:"#B39DDB"},
+  {id:"super_coin",name:"Super Coin",icon:"⬆️⬆️",desc:"MINDEN érték ×2",color:"#FFD700"},
+  {id:"super_multi",name:"Super Multi",icon:"✖️✖️",desc:"MINDEN szorzó ×3",color:"#E53935"},
+];
+
+function SlotMachine({onBack,onAddScore}){
+  const user=useState(()=>{try{return JSON.parse(localStorage.getItem("hobbit_current"));}catch{return null;}})[0];
+  const totalScore=useState(()=>{try{const s=JSON.parse(localStorage.getItem("hobbit_task_scores")||"{}");return Object.values(s).reduce((a,b)=>a+b,0);}catch{return 0;}})[0];
+  const [bet,setBet]=useState(10);
+  const [balance,setBalance]=useState(()=>{const b=localStorage.getItem("hobbit_slot_balance");return b?parseInt(b):1000;});
+  const [grid,setGrid]=useState(()=>{const g=[];for(let r=0;r<3;r++){g[r]=[];for(let c=0;c<3;c++)g[r][c]=SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)];}return g;});
+  const [boosters,setBoosters]=useState([null,null,null]); // top row per column
+  const [spinning,setSpinning]=useState(false);
+  const [spinReels,setSpinReels]=useState([false,false,false]);
+  const [winLines,setWinLines]=useState([]);
+  const [lastWin,setLastWin]=useState(0);
+  const [bonusMode,setBonusMode]=useState(false); // hold & respin mode
+  const [respins,setRespins]=useState(0);
+  const [locked,setLocked]=useState(()=>{const l=[];for(let r=0;r<3;r++){l[r]=[];for(let c=0;c<3;c++)l[r][c]=false;}return l;});
+  const [coinValues,setCoinValues]=useState(()=>{const v=[];for(let r=0;r<3;r++){v[r]=[];for(let c=0;c<3;c++)v[r][c]=0;}return v;});
+  const [multipliers,setMultipliers]=useState([1,1,1]); // per-column multiplier
+  const [globalMult,setGlobalMult]=useState(1);
+  const [jackpot,setJackpot]=useState(null);
+  const [totalBonusWin,setTotalBonusWin]=useState(0);
+  const [showResult,setShowResult]=useState(false);
+  const [history,setHistory]=useState(()=>{try{return JSON.parse(localStorage.getItem("hobbit_slot_history")||"[]");}catch{return[];}});
+  const [flash,setFlash]=useState(null); // lightning flash effect
+  const spinRef=useRef(null);
+
+  const saveBalance=(b)=>{setBalance(b);localStorage.setItem("hobbit_slot_balance",String(b));};
+  const BETS=[5,10,25,50,100,250,500];
+
+  // Refill balance from score points
+  const refill=(amount)=>{
+    if(totalScore<amount)return;
+    onAddScore?.("slot_refill_"+Date.now(),-amount);
+    saveBalance(balance+amount);
+    sfx.coin?.();
+  };
+
+  // Generate random symbol
+  const randSym=()=>SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)];
+
+  // Generate random booster (rare)
+  const randBooster=()=>{
+    const r=Math.random();
+    if(r<0.03)return SLOT_BOOSTERS[3]; // super multi 3%
+    if(r<0.08)return SLOT_BOOSTERS[2]; // super coin 5%
+    if(r<0.18)return SLOT_BOOSTERS[1]; // multi up 10%
+    if(r<0.32)return SLOT_BOOSTERS[0]; // coin up 14%
+    return null; // 68% nothing
+  };
+
+  // Check paylines (3 rows horizontal)
+  const checkWins=(g)=>{
+    const wins=[];
+    for(let row=0;row<3;row++){
+      if(g[row][0].id===g[row][1].id&&g[row][1].id===g[row][2].id){
+        wins.push({row,symbol:g[row][0],payout:g[row][0].value*bet});
+      }
+    }
+    // 3 of same in any diagonal
+    if(g[0][0].id===g[1][1].id&&g[1][1].id===g[2][2].id){
+      wins.push({row:"diag1",symbol:g[1][1],payout:g[1][1].value*bet});
+    }
+    if(g[0][2].id===g[1][1].id&&g[1][1].id===g[2][0].id){
+      wins.push({row:"diag2",symbol:g[1][1],payout:g[1][1].value*bet});
+    }
+    return wins;
+  };
+
+  // Count coins on grid (for bonus mode)
+  const countCoins=(g)=>{let c=0;for(let r=0;r<3;r++)for(let col=0;col<3;col++)if(g[r][col].id==="coin")c++;return c;};
+
+  // Check if bonus triggered (3+ coins)
+  const checkBonus=(g)=>countCoins(g)>=3;
+
+  // MAIN SPIN
+  const doSpin=()=>{
+    if(spinning||balance<bet)return;
+    saveBalance(balance-bet);
+    setWinLines([]);setLastWin(0);setShowResult(false);setJackpot(null);
+    setSpinning(true);
+
+    // Generate new grid
+    const newGrid=[];
+    for(let r=0;r<3;r++){newGrid[r]=[];for(let c=0;c<3;c++)newGrid[r][c]=randSym();}
+    // Generate boosters
+    const newBoosters=[randBooster(),randBooster(),randBooster()];
+
+    // Staggered reel stop animation
+    setSpinReels([true,true,true]);
+    sfx.dice?.();
+
+    setTimeout(()=>{
+      setSpinReels([false,true,true]);setGrid(g=>{const n=[...g];n[0]=newGrid[0];return n.map(r=>[...r]);});
+      // Reconstruct properly
+      setGrid([newGrid[0].map(s=>({...s})),[...grid[1]],[...grid[2]]]);
+      sfx.click?.();
+    },400);
+    setTimeout(()=>{
+      setSpinReels([false,false,true]);
+      setGrid([newGrid[0].map(s=>({...s})),newGrid[1].map(s=>({...s})),[...grid[2]]]);
+      sfx.click?.();
+    },700);
+    setTimeout(()=>{
+      setSpinReels([false,false,false]);
+      const finalGrid=newGrid.map(r=>r.map(s=>({...s})));
+      setGrid(finalGrid);
+      setBoosters(newBoosters);
+      sfx.click?.();
+      setSpinning(false);
+
+      // Check for bonus trigger
+      if(checkBonus(finalGrid)){
+        sfx.achievement?.();
+        setFlash("⚡");setTimeout(()=>setFlash(null),800);
+        // Enter bonus mode
+        const initLocked=[];const initValues=[];
+        for(let r=0;r<3;r++){initLocked[r]=[];initValues[r]=[];for(let c=0;c<3;c++){
+          if(finalGrid[r][c].id==="coin"){initLocked[r][c]=true;initValues[r][c]=Math.floor(Math.random()*5+1)*bet;}
+          else{initLocked[r][c]=false;initValues[r][c]=0;}
+        }}
+        setLocked(initLocked);setCoinValues(initValues);
+        setMultipliers([1,1,1]);setGlobalMult(1);
+        setBonusMode(true);setRespins(3);setTotalBonusWin(0);
+        return;
+      }
+
+      // Check payline wins
+      const wins=checkWins(finalGrid);
+      if(wins.length>0){
+        const total=wins.reduce((a,w)=>a+w.payout,0);
+        setWinLines(wins);setLastWin(total);
+        saveBalance(balance-bet+total);
+        sfx.success?.();
+        setFlash("💰");setTimeout(()=>setFlash(null),600);
+      }
+    },1000);
+  };
+
+  // BONUS RESPIN
+  const doBonusRespin=()=>{
+    if(spinning||respins<=0)return;
+    setSpinning(true);setRespins(r=>r-1);
+    sfx.dice?.();
+
+    setTimeout(()=>{
+      let newCoin=false;
+      const newGrid=grid.map(r=>r.map(s=>({...s})));
+      const newLocked=locked.map(r=>[...r]);
+      const newValues=coinValues.map(r=>[...r]);
+      const newBoosters=[...boosters];
+
+      // Spin only unlocked cells
+      for(let r=0;r<3;r++)for(let c=0;c<3;c++){
+        if(!newLocked[r][c]){
+          const sym=randSym();
+          newGrid[r][c]=sym;
+          if(sym.id==="coin"){
+            newLocked[r][c]=true;
+            newValues[r][c]=Math.floor(Math.random()*8+1)*bet;
+            newCoin=true;
+          }
+        }
+      }
+      // Random booster on respin
+      for(let c=0;c<3;c++){if(!newBoosters[c])newBoosters[c]=randBooster();}
+
+      setGrid(newGrid);setLocked(newLocked);setCoinValues(newValues);setBoosters(newBoosters);
+      setSpinning(false);
+
+      if(newCoin){
+        setRespins(3); // reset respins!
+        sfx.success?.();setFlash("⚡");setTimeout(()=>setFlash(null),600);
+      }
+
+      // Apply boosters
+      const newMults=[...multipliers];let newGlobal=globalMult;
+      for(let c=0;c<3;c++){
+        if(newBoosters[c]?.id==="coin_up"){for(let r=0;r<3;r++)if(newLocked[r][c])newValues[r][c]*=2;}
+        if(newBoosters[c]?.id==="multi_up"){newMults[c]*=(2+Math.floor(Math.random()*3));}
+        if(newBoosters[c]?.id==="super_coin"){for(let r=0;r<3;r++)for(let cc=0;cc<3;cc++)if(newLocked[r][cc])newValues[r][cc]*=2;}
+        if(newBoosters[c]?.id==="super_multi"){newGlobal*=3;}
+      }
+      setCoinValues(newValues);setMultipliers(newMults);setGlobalMult(newGlobal);
+
+      // Check if grid is full → GRAND JACKPOT
+      let allFull=true;
+      for(let r=0;r<3;r++)for(let c=0;c<3;c++)if(!newLocked[r][c])allFull=false;
+      if(allFull){
+        setFlash("🌩️");
+        setJackpot(SLOT_JACKPOTS[3]); // GRAND
+        sfx.achievement?.();
+      }
+
+      // Check if respins exhausted
+      if(!newCoin&&respins<=1){
+        // End bonus — calculate total
+        setTimeout(()=>{
+          let total=0;
+          for(let r=0;r<3;r++)for(let c=0;c<3;c++){
+            if(newLocked[r][c])total+=newValues[r][c]*newMults[c]*newGlobal;
+          }
+          // Jackpot check (not grand — random based on coins)
+          const coinCount=countCoins(newGrid);
+          if(!allFull&&coinCount>=6){setJackpot(SLOT_JACKPOTS[2]);total+=SLOT_JACKPOTS[2].mult*bet;} // Major
+          else if(!allFull&&coinCount>=5){setJackpot(SLOT_JACKPOTS[1]);total+=SLOT_JACKPOTS[1].mult*bet;} // Minor
+          else if(!allFull&&coinCount>=4&&Math.random()<0.5){setJackpot(SLOT_JACKPOTS[0]);total+=SLOT_JACKPOTS[0].mult*bet;} // Mini
+          if(allFull)total+=SLOT_JACKPOTS[3].mult*bet;
+
+          setTotalBonusWin(Math.round(total));
+          saveBalance(balance+Math.round(total));
+          setShowResult(true);
+          sfx.achievement?.();
+          setFlash("💰");setTimeout(()=>setFlash(null),1000);
+          // Save history
+          const entry={bet,win:Math.round(total),jackpot:jackpot?.id||null,time:Date.now()};
+          const h=[entry,...history].slice(0,20);setHistory(h);localStorage.setItem("hobbit_slot_history",JSON.stringify(h));
+        },800);
+      }
+    },600);
+  };
+
+  // End bonus and return to normal
+  const endBonus=()=>{
+    setBonusMode(false);setShowResult(false);setJackpot(null);
+    setLocked(()=>{const l=[];for(let r=0;r<3;r++){l[r]=[];for(let c=0;c<3;c++)l[r][c]=false;}return l;});
+    setCoinValues(()=>{const v=[];for(let r=0;r<3;r++){v[r]=[];for(let c=0;c<3;c++)v[r][c]=0;}return v;});
+    setBoosters([null,null,null]);setMultipliers([1,1,1]);setGlobalMult(1);
+  };
+
+  // Buy bonus modes
+  const buyBonus=(tier)=>{
+    const costs={standard:30,ultra:75,thunder:150};
+    const cost=costs[tier]*bet;
+    if(balance<cost)return;
+    saveBalance(balance-cost);
+    sfx.coin?.();
+    // Pre-fill grid with coins and boosters
+    const newGrid=[];const initLocked=[];const initValues=[];
+    const coinChance=tier==="thunder"?0.6:tier==="ultra"?0.45:0.35;
+    for(let r=0;r<3;r++){newGrid[r]=[];initLocked[r]=[];initValues[r]=[];for(let c=0;c<3;c++){
+      if(Math.random()<coinChance){
+        newGrid[r][c]=SLOT_SYMBOLS.find(s=>s.id==="coin");
+        initLocked[r][c]=true;
+        const valMult=tier==="thunder"?8:tier==="ultra"?5:3;
+        initValues[r][c]=Math.floor(Math.random()*valMult+1)*bet;
+      }else{newGrid[r][c]=randSym();initLocked[r][c]=false;initValues[r][c]=0;}
+    }}
+    const newBoosters=tier==="thunder"
+      ?[SLOT_BOOSTERS[3],SLOT_BOOSTERS[2],SLOT_BOOSTERS[1]]
+      :tier==="ultra"
+        ?[SLOT_BOOSTERS[Math.floor(Math.random()*2)],randBooster(),SLOT_BOOSTERS[Math.floor(Math.random()*2)]]
+        :[randBooster(),randBooster(),randBooster()];
+    setGrid(newGrid);setLocked(initLocked);setCoinValues(initValues);setBoosters(newBoosters);
+    setMultipliers([1,1,1]);setGlobalMult(tier==="thunder"?2:1);
+    setBonusMode(true);setRespins(3);setTotalBonusWin(0);setShowResult(false);setJackpot(null);
+    setFlash("⚡");setTimeout(()=>setFlash(null),800);
+    sfx.achievement?.();
+  };
+
+  const lightningGlow=bonusMode?"0 0 40px rgba(77,173,226,.3),0 0 80px rgba(77,173,226,.1)":"none";
+
+  return <div style={{padding:"12px",display:"flex",flexDirection:"column",gap:10,flex:1,position:"relative",overflow:"hidden"}}>
+    {/* Lightning flash overlay */}
+    {flash&&<div style={{position:"absolute",inset:0,background:"radial-gradient(circle,rgba(77,173,226,.15),transparent 70%)",zIndex:10,pointerEvents:"none",animation:"popIn .3s ease",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"4rem"}}>{flash}</div>}
+
+    {/* Header */}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      <button onClick={onBack} style={{background:"none",border:"1px solid rgba(201,168,76,.2)",color:"var(--gm)",padding:"4px 12px",fontFamily:"'Cinzel',serif",fontSize:".6rem",cursor:"pointer"}}>← Vissza</button>
+      <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".85rem",color:"#4DADE2",letterSpacing:".08em",textShadow:"0 0 20px rgba(77,173,226,.4)"}}>⚡ Középföld Villám</div>
+    </div>
+
+    {/* Balance */}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 10px",background:"rgba(0,0,0,.3)",border:"1px solid rgba(77,173,226,.15)",borderRadius:4}}>
+      <div style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",color:"var(--gm)"}}>Egyenleg</div>
+      <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".9rem",color:"#FFD700"}}>{balance.toLocaleString()} 🪙</div>
+    </div>
+
+    {/* Jackpot tiers */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:4}}>
+      {SLOT_JACKPOTS.map(j=><div key={j.id} style={{padding:"4px",textAlign:"center",background:`${j.color}08`,border:`1px solid ${j.color}${jackpot?.id===j.id?"":"22"}`,borderRadius:3,animation:jackpot?.id===j.id?"gP 1s ease infinite":"none",boxShadow:jackpot?.id===j.id?`0 0 20px ${j.color}66`:"none"}}>
+        <div style={{fontSize:".55rem"}}>{j.icon}</div>
+        <div style={{fontFamily:"'Cinzel',serif",fontSize:".4rem",color:j.color}}>{j.name}</div>
+        <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".5rem",color:j.color}}>×{j.mult}</div>
+      </div>)}
+    </div>
+
+    {/* Booster row (top row) */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:4}}>
+      {boosters.map((b,i)=><div key={i} style={{padding:"4px 6px",textAlign:"center",background:b?`${b.color}12`:"rgba(0,0,0,.2)",border:`1px solid ${b?b.color+"44":"rgba(77,173,226,.08)"}`,borderRadius:3,minHeight:24}}>
+        {b?<><span style={{fontSize:".6rem"}}>{b.icon}</span><span style={{fontFamily:"'Cinzel',serif",fontSize:".35rem",color:b.color,marginLeft:3}}>{b.name}</span></>
+          :<span style={{fontSize:".5rem",color:"rgba(77,173,226,.2)"}}>—</span>}
+      </div>)}
+    </div>
+
+    {/* GRID */}
+    <div style={{background:"rgba(0,0,0,.5)",border:`2px solid ${bonusMode?"rgba(77,173,226,.4)":"rgba(201,168,76,.15)"}`,borderRadius:8,padding:8,boxShadow:lightningGlow,transition:"all .5s"}}>
+      {/* Multiplier indicators */}
+      {bonusMode&&(globalMult>1||multipliers.some(m=>m>1))&&<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:4,marginBottom:4}}>
+        {multipliers.map((m,i)=><div key={i} style={{textAlign:"center",fontFamily:"'Cinzel Decorative',serif",fontSize:".5rem",color:m*globalMult>1?"#B39DDB":"transparent"}}>×{m*globalMult}</div>)}
+      </div>}
+      {/* 3x3 Grid */}
+      <div style={{display:"grid",gridTemplateRows:"repeat(3,1fr)",gap:4}}>
+        {[0,1,2].map(row=><div key={row} style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:4}}>
+          {[0,1,2].map(col=>{
+            const sym=grid[row][col];
+            const isLocked=locked[row][col];
+            const coinVal=coinValues[row][col];
+            const isSpinning=spinReels[row];
+            const isWin=winLines.some(w=>w.row===row||(w.row==="diag1"&&row===col)||(w.row==="diag2"&&row+col===2));
+            return <div key={col} style={{aspectRatio:"1",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:isLocked?"rgba(77,173,226,.12)":isWin?"rgba(255,215,0,.08)":"rgba(0,0,0,.3)",border:`1.5px solid ${isLocked?"rgba(77,173,226,.5)":isWin?"rgba(255,215,0,.4)":"rgba(201,168,76,.08)"}`,borderRadius:6,transition:"all .3s",animation:isSpinning?"spin .3s linear infinite":isWin?"gP 1s ease infinite":"none",boxShadow:isLocked?`0 0 15px rgba(77,173,226,.3)${coinVal>bet*5?",0 0 30px rgba(255,215,0,.2)":""}`:isWin?`0 0 15px rgba(255,215,0,.3)`:"none",position:"relative"}}>
+              <span style={{fontSize:"clamp(1.5rem,6vw,2.2rem)",filter:isLocked?"drop-shadow(0 0 8px rgba(77,173,226,.6))":isWin?`drop-shadow(0 0 8px ${sym.color})`:"none",transition:"all .3s"}}>{sym.icon}</span>
+              {isLocked&&coinVal>0&&<div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"clamp(.4rem,1.5vw,.55rem)",color:"#4DADE2",textShadow:"0 0 8px rgba(77,173,226,.5)"}}>{coinVal}</div>}
+              {isLocked&&<div style={{position:"absolute",top:2,right:3,fontSize:".35rem",color:"rgba(77,173,226,.6)"}}>🔒</div>}
+            </div>;
+          })}
+        </div>)}
+      </div>
+    </div>
+
+    {/* Win display */}
+    {lastWin>0&&!bonusMode&&<div style={{textAlign:"center",padding:"6px",background:"rgba(255,215,0,.06)",border:"1px solid rgba(255,215,0,.2)",borderRadius:4,animation:"popIn .3s ease"}}>
+      <span style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1rem",color:"#FFD700"}}>+{lastWin.toLocaleString()} 🪙</span>
+    </div>}
+
+    {/* Bonus mode UI */}
+    {bonusMode&&!showResult&&<div style={{textAlign:"center",padding:"8px",background:"rgba(77,173,226,.06)",border:"1px solid rgba(77,173,226,.25)",borderRadius:4}}>
+      <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".7rem",color:"#4DADE2",letterSpacing:".1em",animation:"gP 2s ease infinite"}}>⚡ VILLÁM BÓNUSZ ⚡</div>
+      <div style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",color:"var(--gm)",marginTop:4}}>Respinek: <span style={{color:"#FFD700",fontSize:".7rem"}}>{respins}</span> • Új érme = respin reset!</div>
+      <button onClick={doBonusRespin} disabled={spinning} style={{marginTop:8,padding:"10px 28px",background:spinning?"rgba(77,173,226,.05)":"rgba(77,173,226,.12)",border:`2px solid ${spinning?"rgba(77,173,226,.1)":"rgba(77,173,226,.5)"}`,color:spinning?"var(--gm)":"#4DADE2",fontFamily:"'Cinzel Decorative',serif",fontSize:".8rem",cursor:spinning?"not-allowed":"pointer",borderRadius:6,letterSpacing:".08em",transition:"all .3s"}}>⚡ RESPIN</button>
+    </div>}
+
+    {/* Bonus result */}
+    {showResult&&<div style={{textAlign:"center",padding:"16px",background:"rgba(0,0,0,.6)",border:"2px solid rgba(255,215,0,.4)",borderRadius:8,animation:"popIn .4s ease"}}>
+      {jackpot&&<div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.2rem",color:jackpot.color,animation:"gP 1s ease infinite",marginBottom:8}}>{jackpot.icon} {jackpot.name} JACKPOT! {jackpot.icon}</div>}
+      <div style={{fontFamily:"'Cinzel',serif",fontSize:".6rem",color:"var(--gm)"}}>Összes nyeremény</div>
+      <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.8rem",color:"#FFD700",textShadow:"0 0 20px rgba(255,215,0,.5)",animation:"gP 2s ease infinite"}}>+{totalBonusWin.toLocaleString()} 🪙</div>
+      {globalMult>1&&<div style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:"#B39DDB",marginTop:4}}>Globális szorzó: ×{globalMult}</div>}
+      <button onClick={endBonus} style={{marginTop:12,padding:"10px 24px",background:"rgba(255,215,0,.1)",border:"1px solid rgba(255,215,0,.4)",color:"#FFD700",fontFamily:"'Cinzel',serif",fontSize:".7rem",cursor:"pointer",borderRadius:4}}>Bezárás ✓</button>
+    </div>}
+
+    {/* Normal spin controls */}
+    {!bonusMode&&<>
+      {/* Bet selector */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+        <span style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:"var(--gm)"}}>Tét:</span>
+        {BETS.map(b=><button key={b} onClick={()=>setBet(b)} style={{padding:"3px 8px",background:bet===b?"rgba(77,173,226,.15)":"rgba(0,0,0,.2)",border:`1px solid ${bet===b?"rgba(77,173,226,.4)":"rgba(201,168,76,.08)"}`,color:bet===b?"#4DADE2":"var(--gm)",fontFamily:"'Cinzel',serif",fontSize:".45rem",cursor:"pointer",borderRadius:3}}>{b}</button>)}
+      </div>
+
+      {/* Spin button */}
+      <button onClick={doSpin} disabled={spinning||balance<bet} style={{padding:"14px",background:spinning?"rgba(0,0,0,.3)":"linear-gradient(135deg,rgba(77,173,226,.12),rgba(179,157,219,.08))",border:`2px solid ${spinning?"rgba(77,173,226,.1)":"rgba(77,173,226,.5)"}`,color:spinning?"var(--gm)":"#4DADE2",fontFamily:"'Cinzel Decorative',serif",fontSize:"1rem",cursor:spinning?"not-allowed":"pointer",borderRadius:8,letterSpacing:".1em",transition:"all .3s",textShadow:spinning?"none":"0 0 15px rgba(77,173,226,.4)"}}>
+        {spinning?"Pörög...":"⚡ PÖRGETÉS ⚡"}
+      </button>
+
+      {/* Buy bonus buttons */}
+      <div style={{display:"flex",gap:6}}>
+        {[{id:"standard",label:"Bónusz",cost:30,color:"#4DADE2"},{id:"ultra",label:"Ultra",cost:75,color:"#B39DDB"},{id:"thunder",label:"Villám",cost:150,color:"#FFD700"}].map(t=>{
+          const c=t.cost*bet;const canBuy=balance>=c;
+          return <button key={t.id} onClick={()=>canBuy&&buyBonus(t.id)} style={{flex:1,padding:"8px 4px",background:canBuy?`${t.color}08`:"rgba(0,0,0,.2)",border:`1px solid ${canBuy?t.color+"44":"rgba(201,168,76,.06)"}`,color:canBuy?t.color:"var(--gm)",fontFamily:"'Cinzel',serif",fontSize:".45rem",cursor:canBuy?"pointer":"not-allowed",borderRadius:4,opacity:canBuy?1:.4,textAlign:"center"}}>
+            <div>{t.label}</div>
+            <div style={{fontSize:".4rem",marginTop:2}}>{c.toLocaleString()}🪙</div>
+          </button>;
+        })}
+      </div>
+
+      {/* Refill */}
+      {balance<bet&&<div style={{textAlign:"center",padding:"8px",background:"rgba(229,57,53,.06)",border:"1px solid rgba(229,57,53,.2)",borderRadius:4}}>
+        <div style={{fontFamily:"'Cinzel',serif",fontSize:".6rem",color:"#EF9A9A",marginBottom:6}}>Elfogyott az érméd!</div>
+        <div style={{display:"flex",gap:6,justifyContent:"center"}}>
+          {[500,2000,5000].map(a=><button key={a} onClick={()=>refill(a)} style={{padding:"5px 10px",background:"rgba(201,168,76,.08)",border:"1px solid rgba(201,168,76,.2)",color:"var(--gold)",fontFamily:"'Cinzel',serif",fontSize:".5rem",cursor:"pointer",borderRadius:3}}>+{a}🪙 ({a}pt)</button>)}
+        </div>
+      </div>}
+    </>}
+
+    {/* History */}
+    {history.length>0&&!bonusMode&&<div style={{padding:"8px",background:"rgba(0,0,0,.2)",border:"1px solid rgba(201,168,76,.08)",borderRadius:4}}>
+      <div style={{fontFamily:"'Cinzel',serif",fontSize:".45rem",color:"var(--gm)",letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>Utolsó pörgetések</div>
+      <div style={{display:"flex",gap:4,overflowX:"auto"}}>
+        {history.slice(0,8).map((h,i)=><div key={i} style={{padding:"3px 6px",background:h.win>0?"rgba(102,187,106,.06)":"rgba(0,0,0,.2)",border:`1px solid ${h.win>0?"rgba(102,187,106,.15)":"rgba(201,168,76,.06)"}`,borderRadius:3,whiteSpace:"nowrap",minWidth:50,textAlign:"center"}}>
+          <div style={{fontFamily:"'Cinzel',serif",fontSize:".38rem",color:h.win>0?"#66BB6A":"var(--gm)"}}>{h.win>0?`+${h.win}`:"-"+h.bet}</div>
+          {h.jackpot&&<div style={{fontSize:".3rem",color:"#FFD700"}}>⚡{h.jackpot}</div>}
+        </div>)}
+      </div>
+    </div>}
+  </div>;
+}
+
 function TavernChat(){
   const [messages,setMessages]=useState([]);
   const [input,setInput]=useState("");
@@ -1631,9 +2039,10 @@ function TavernChat(){
   </div>;
 }
 
-function MiniGamesTab(){
+function MiniGamesTab({onAddScore}){
   const [activeGame,setActiveGame]=useState(null);
   const [showDuel,setShowDuel]=useState(false);
+  const [showSlot,setShowSlot]=useState(false);
   const [carouselIdx,setCarouselIdx]=useState(0);
   const touchRef=useRef(null);
   const games=[
@@ -1651,6 +2060,7 @@ function MiniGamesTab(){
     try{const plays=JSON.parse(localStorage.getItem("hobbit_minigame_plays")||"{}");plays[gid]=(plays[gid]||0)+1;plays["_t_"+gid]=Date.now();localStorage.setItem("hobbit_minigame_plays",JSON.stringify(plays));}catch(e){}
   };
   if(showDuel)return <div className="gentle-pop" style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}><DuelMode onBack={()=>setShowDuel(false)}/></div>;
+  if(showSlot)return <div className="gentle-pop" style={{flex:1,display:"flex",flexDirection:"column",minHeight:0,overflow:"auto"}}><SlotMachine onBack={()=>setShowSlot(false)} onAddScore={onAddScore}/></div>;
   if(activeGame){
     const GAME_MAP={memory:MemoryGame,reaction:ReactionGame,wordsearch:WordSearch,riddle:RiddleGame,archery:ArcheryGame,treasure:TreasureGame};
     const GameComp=GAME_MAP[activeGame]||MemoryGame;
@@ -1688,8 +2098,11 @@ function MiniGamesTab(){
     <div style={{display:"flex",justifyContent:"center",gap:8,padding:"10px 0 8px",flexShrink:0}}>
       {games.map((g,i)=><button key={i} onClick={()=>setCarouselIdx(i)} style={{width:i===carouselIdx?20:8,height:8,borderRadius:4,background:i===carouselIdx?g.color:"rgba(201,168,76,.15)",border:"none",cursor:"pointer",transition:"all .3s"}}/>)}
     </div>
-    {/* Duel button */}
-    <button onClick={()=>setShowDuel(true)} style={{margin:"0 16px 8px",padding:"12px",background:"linear-gradient(135deg,rgba(77,173,226,.06),rgba(229,57,53,.04))",border:"1px solid rgba(201,168,76,.2)",display:"flex",alignItems:"center",justifyContent:"center",gap:10,cursor:"pointer",borderRadius:4,transition:"all .3s"}}><span style={{fontSize:"1.3rem"}}>⚔️</span><span style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".8rem",color:"var(--gold)",letterSpacing:".08em"}}>1v1 Párbaj</span><span style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:"var(--gm)",padding:"2px 8px",background:"rgba(201,168,76,.08)",border:"1px solid rgba(201,168,76,.15)",borderRadius:10}}>Ranked</span></button>
+    {/* Special modes */}
+    <div style={{display:"flex",gap:6,margin:"0 16px 8px"}}>
+      <button onClick={()=>setShowDuel(true)} style={{flex:1,padding:"10px",background:"linear-gradient(135deg,rgba(77,173,226,.06),rgba(229,57,53,.04))",border:"1px solid rgba(201,168,76,.2)",display:"flex",alignItems:"center",justifyContent:"center",gap:8,cursor:"pointer",borderRadius:4,transition:"all .3s"}}><span style={{fontSize:"1.1rem"}}>⚔️</span><span style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".7rem",color:"var(--gold)",letterSpacing:".06em"}}>Párbaj</span></button>
+      <button onClick={()=>setShowSlot(true)} style={{flex:1,padding:"10px",background:"linear-gradient(135deg,rgba(77,173,226,.08),rgba(179,157,219,.04))",border:"1px solid rgba(77,173,226,.2)",display:"flex",alignItems:"center",justifyContent:"center",gap:8,cursor:"pointer",borderRadius:4,transition:"all .3s"}}><span style={{fontSize:"1.1rem"}}>⚡</span><span style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".7rem",color:"#4DADE2",letterSpacing:".06em"}}>Nyerőgép</span></button>
+    </div>
     {/* Global tavern chat */}
     <TavernChat/>
   </div>;
@@ -3734,7 +4147,7 @@ export default function HobbitApp(){
         <ErrorCatch>
         <div style={{flex:1,display:"flex",flexDirection:"column",minHeight:0,overflow:"hidden"}}>
           {tab==="map"    &&<div key="map" className="tab-content" style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}>{(()=>{const ss=_getActiveSeason();return ss?<button onClick={()=>{setTab("profile");}} style={{padding:"8px 16px",background:ss.bg,border:"none",borderBottom:`1px solid ${ss.border}`,display:"flex",alignItems:"center",justifyContent:"center",gap:10,cursor:"pointer",flexShrink:0,animation:"seasonBannerPulse 4s ease-in-out infinite"}}><span style={{fontSize:"1rem"}}>{ss.icon}</span><span style={{fontFamily:"'Cinzel',serif",fontSize:".62rem",color:ss.color,letterSpacing:".1em"}}>{ss.name} — Aktív!</span><span style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:"var(--gm)",letterSpacing:".06em"}}>Részletek ›</span></button>:null;})()}<AdventureMap user={user} completed={completed} scores={scores} onSelect={setActiveTask} onAddScore={(key,pts)=>{setScores(s=>{const next={...s,[key]:(s[key]||0)+pts};localStorage.setItem("hobbit_task_scores",JSON.stringify(next));const cu=JSON.parse(localStorage.getItem("hobbit_current")||"{}");cu.score=Object.values(next).reduce((a,b)=>a+b,0);localStorage.setItem("hobbit_current",JSON.stringify(cu));return next;});}}/></div>}
-          {tab==="games"  &&<div key="games" className="tab-content" style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}><MiniGamesTab/></div>}
+          {tab==="games"  &&<div key="games" className="tab-content" style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}><MiniGamesTab onAddScore={(key,pts)=>{setScores(s=>{const next={...s,[key]:(s[key]||0)+pts};localStorage.setItem("hobbit_task_scores",JSON.stringify(next));const cu=JSON.parse(localStorage.getItem("hobbit_current")||"{}");cu.score=Object.values(next).reduce((a,b)=>a+b,0);localStorage.setItem("hobbit_current",JSON.stringify(cu));return next;});}}/></div>}
           {tab==="profile"&&<div key="profile" className="tab-content" style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}><ProfileTab user={user} completed={completed} scores={scores} onInviteFriend={(friendName)=>{setTab("board");}} onAddScore={(key,pts)=>{setScores(s=>{const next={...s,[key]:(s[key]||0)+pts};localStorage.setItem("hobbit_task_scores",JSON.stringify(next));const cu=JSON.parse(localStorage.getItem("hobbit_current")||"{}");cu.score=Object.values(next).reduce((a,b)=>a+b,0);localStorage.setItem("hobbit_current",JSON.stringify(cu));return next;});}}/></div>}
           {tab==="board"  &&<div key="board" className="tab-content" style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}><BoardGameTab user={user} onBack={()=>setTab("map")}/></div>}
         </div>
