@@ -1621,7 +1621,12 @@ function SlotMachine({onBack,onAddScore}){
     sfx.coin?.();
   };
 
-  const randSym=()=>SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)];
+  // Coin has higher weight (25%) to make bonus mode achievable
+  const randSym=()=>{
+    if(Math.random()<0.25)return SLOT_SYMBOLS.find(s=>s.id==="coin");
+    const nonCoin=SLOT_SYMBOLS.filter(s=>s.id!=="coin");
+    return nonCoin[Math.floor(Math.random()*nonCoin.length)];
+  };
   const randBooster=()=>{
     const r=Math.random();
     if(r<0.03)return SLOT_BOOSTERS[3];
