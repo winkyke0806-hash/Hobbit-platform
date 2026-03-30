@@ -1589,54 +1589,48 @@ const SLOT_BOOSTERS=[
 ];
 
 function SlotMachine({onBack,onAddScore}){
-  const user=useState(()=>{try{return JSON.parse(localStorage.getItem("hobbit_current"));}catch{return null;}})[0];
-  const totalScore=useState(()=>{try{const s=JSON.parse(localStorage.getItem("hobbit_task_scores")||"{}");return Object.values(s).reduce((a,b)=>a+b,0);}catch{return 0;}})[0];
   const [bet,setBet]=useState(10);
-  const [balance,setBalance]=useState(()=>{const b=localStorage.getItem("hobbit_slot_balance");return b?parseInt(b):1000;});
+  const balRef=useRef(()=>{const b=localStorage.getItem("hobbit_slot_balance");return b?parseInt(b):1000;});
+  const [balance,setBalance]=useState(balRef.current);
   const [grid,setGrid]=useState(()=>{const g=[];for(let r=0;r<3;r++){g[r]=[];for(let c=0;c<3;c++)g[r][c]=SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)];}return g;});
-  const [boosters,setBoosters]=useState([null,null,null]); // top row per column
+  const [boosters,setBoosters]=useState([null,null,null]);
   const [spinning,setSpinning]=useState(false);
-  const [spinReels,setSpinReels]=useState([false,false,false]);
+  const [reelPhase,setReelPhase]=useState(0); // 0=idle, 1=all spinning, 2=col0 stopped, 3=col1 stopped, 4=done
   const [winLines,setWinLines]=useState([]);
   const [lastWin,setLastWin]=useState(0);
-  const [bonusMode,setBonusMode]=useState(false); // hold & respin mode
+  const [bonusMode,setBonusMode]=useState(false);
   const [respins,setRespins]=useState(0);
   const [locked,setLocked]=useState(()=>{const l=[];for(let r=0;r<3;r++){l[r]=[];for(let c=0;c<3;c++)l[r][c]=false;}return l;});
   const [coinValues,setCoinValues]=useState(()=>{const v=[];for(let r=0;r<3;r++){v[r]=[];for(let c=0;c<3;c++)v[r][c]=0;}return v;});
-  const [multipliers,setMultipliers]=useState([1,1,1]); // per-column multiplier
+  const [multipliers,setMultipliers]=useState([1,1,1]);
   const [globalMult,setGlobalMult]=useState(1);
   const [jackpot,setJackpot]=useState(null);
   const [totalBonusWin,setTotalBonusWin]=useState(0);
   const [showResult,setShowResult]=useState(false);
   const [history,setHistory]=useState(()=>{try{return JSON.parse(localStorage.getItem("hobbit_slot_history")||"[]");}catch{return[];}});
-  const [flash,setFlash]=useState(null); // lightning flash effect
-  const spinRef=useRef(null);
+  const [flash,setFlash]=useState(null);
+  const pendingGridRef=useRef(null);
 
   const saveBalance=(b)=>{setBalance(b);localStorage.setItem("hobbit_slot_balance",String(b));};
+  const addBalance=(delta)=>{setBalance(prev=>{const n=prev+delta;localStorage.setItem("hobbit_slot_balance",String(n));return n;});};
   const BETS=[5,10,25,50,100,250,500];
 
-  // Refill balance from score points
   const refill=(amount)=>{
-    if(totalScore<amount)return;
     onAddScore?.("slot_refill_"+Date.now(),-amount);
-    saveBalance(balance+amount);
+    addBalance(amount);
     sfx.coin?.();
   };
 
-  // Generate random symbol
   const randSym=()=>SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)];
-
-  // Generate random booster (rare)
   const randBooster=()=>{
     const r=Math.random();
-    if(r<0.03)return SLOT_BOOSTERS[3]; // super multi 3%
-    if(r<0.08)return SLOT_BOOSTERS[2]; // super coin 5%
-    if(r<0.18)return SLOT_BOOSTERS[1]; // multi up 10%
-    if(r<0.32)return SLOT_BOOSTERS[0]; // coin up 14%
-    return null; // 68% nothing
+    if(r<0.03)return SLOT_BOOSTERS[3];
+    if(r<0.08)return SLOT_BOOSTERS[2];
+    if(r<0.18)return SLOT_BOOSTERS[1];
+    if(r<0.32)return SLOT_BOOSTERS[0];
+    return null;
   };
 
-  // Check paylines (3 rows horizontal)
   const checkWins=(g)=>{
     const wins=[];
     for(let row=0;row<3;row++){
@@ -1644,63 +1638,48 @@ function SlotMachine({onBack,onAddScore}){
         wins.push({row,symbol:g[row][0],payout:g[row][0].value*bet});
       }
     }
-    // 3 of same in any diagonal
-    if(g[0][0].id===g[1][1].id&&g[1][1].id===g[2][2].id){
-      wins.push({row:"diag1",symbol:g[1][1],payout:g[1][1].value*bet});
-    }
-    if(g[0][2].id===g[1][1].id&&g[1][1].id===g[2][0].id){
-      wins.push({row:"diag2",symbol:g[1][1],payout:g[1][1].value*bet});
-    }
+    if(g[0][0].id===g[1][1].id&&g[1][1].id===g[2][2].id)wins.push({row:"diag1",symbol:g[1][1],payout:g[1][1].value*bet});
+    if(g[0][2].id===g[1][1].id&&g[1][1].id===g[2][0].id)wins.push({row:"diag2",symbol:g[1][1],payout:g[1][1].value*bet});
     return wins;
   };
 
-  // Count coins on grid (for bonus mode)
   const countCoins=(g)=>{let c=0;for(let r=0;r<3;r++)for(let col=0;col<3;col++)if(g[r][col].id==="coin")c++;return c;};
-
-  // Check if bonus triggered (3+ coins)
-  const checkBonus=(g)=>countCoins(g)>=3;
 
   // MAIN SPIN
   const doSpin=()=>{
     if(spinning||balance<bet)return;
-    saveBalance(balance-bet);
+    addBalance(-bet);
     setWinLines([]);setLastWin(0);setShowResult(false);setJackpot(null);
-    setSpinning(true);
+    setSpinning(true);setReelPhase(1);
 
-    // Generate new grid
     const newGrid=[];
     for(let r=0;r<3;r++){newGrid[r]=[];for(let c=0;c<3;c++)newGrid[r][c]=randSym();}
-    // Generate boosters
     const newBoosters=[randBooster(),randBooster(),randBooster()];
-
-    // Staggered reel stop animation
-    setSpinReels([true,true,true]);
+    pendingGridRef.current=newGrid;
     sfx.dice?.();
 
+    // Staggered column stops
     setTimeout(()=>{
-      setSpinReels([false,true,true]);setGrid(g=>{const n=[...g];n[0]=newGrid[0];return n.map(r=>[...r]);});
-      // Reconstruct properly
-      setGrid([newGrid[0].map(s=>({...s})),[...grid[1]],[...grid[2]]]);
+      setReelPhase(2);
+      setGrid(prev=>prev.map((row,r)=>row.map((s,c)=>c===0?newGrid[r][c]:s)));
       sfx.click?.();
-    },400);
+    },500);
     setTimeout(()=>{
-      setSpinReels([false,false,true]);
-      setGrid([newGrid[0].map(s=>({...s})),newGrid[1].map(s=>({...s})),[...grid[2]]]);
+      setReelPhase(3);
+      setGrid(prev=>prev.map((row,r)=>row.map((s,c)=>c<=1?newGrid[r][c]:s)));
       sfx.click?.();
-    },700);
+    },850);
     setTimeout(()=>{
-      setSpinReels([false,false,false]);
-      const finalGrid=newGrid.map(r=>r.map(s=>({...s})));
+      setReelPhase(4);
+      const finalGrid=newGrid.map(r=>[...r]);
       setGrid(finalGrid);
       setBoosters(newBoosters);
       sfx.click?.();
-      setSpinning(false);
 
-      // Check for bonus trigger
-      if(checkBonus(finalGrid)){
+      // Check bonus (3+ coins)
+      if(countCoins(finalGrid)>=3){
         sfx.achievement?.();
         setFlash("⚡");setTimeout(()=>setFlash(null),800);
-        // Enter bonus mode
         const initLocked=[];const initValues=[];
         for(let r=0;r<3;r++){initLocked[r]=[];initValues[r]=[];for(let c=0;c<3;c++){
           if(finalGrid[r][c].id==="coin"){initLocked[r][c]=true;initValues[r][c]=Math.floor(Math.random()*5+1)*bet;}
@@ -1709,6 +1688,7 @@ function SlotMachine({onBack,onAddScore}){
         setLocked(initLocked);setCoinValues(initValues);
         setMultipliers([1,1,1]);setGlobalMult(1);
         setBonusMode(true);setRespins(3);setTotalBonusWin(0);
+        setSpinning(false);setReelPhase(0);
         return;
       }
 
@@ -1717,11 +1697,12 @@ function SlotMachine({onBack,onAddScore}){
       if(wins.length>0){
         const total=wins.reduce((a,w)=>a+w.payout,0);
         setWinLines(wins);setLastWin(total);
-        saveBalance(balance-bet+total);
+        addBalance(total);
         sfx.success?.();
         setFlash("💰");setTimeout(()=>setFlash(null),600);
       }
-    },1000);
+      setSpinning(false);setReelPhase(0);
+    },1200);
   };
 
   // BONUS RESPIN
@@ -1737,28 +1718,13 @@ function SlotMachine({onBack,onAddScore}){
       const newValues=coinValues.map(r=>[...r]);
       const newBoosters=[...boosters];
 
-      // Spin only unlocked cells
       for(let r=0;r<3;r++)for(let c=0;c<3;c++){
         if(!newLocked[r][c]){
-          const sym=randSym();
-          newGrid[r][c]=sym;
-          if(sym.id==="coin"){
-            newLocked[r][c]=true;
-            newValues[r][c]=Math.floor(Math.random()*8+1)*bet;
-            newCoin=true;
-          }
+          const sym=randSym();newGrid[r][c]=sym;
+          if(sym.id==="coin"){newLocked[r][c]=true;newValues[r][c]=Math.floor(Math.random()*8+1)*bet;newCoin=true;}
         }
       }
-      // Random booster on respin
       for(let c=0;c<3;c++){if(!newBoosters[c])newBoosters[c]=randBooster();}
-
-      setGrid(newGrid);setLocked(newLocked);setCoinValues(newValues);setBoosters(newBoosters);
-      setSpinning(false);
-
-      if(newCoin){
-        setRespins(3); // reset respins!
-        sfx.success?.();setFlash("⚡");setTimeout(()=>setFlash(null),600);
-      }
 
       // Apply boosters
       const newMults=[...multipliers];let newGlobal=globalMult;
@@ -1768,46 +1734,39 @@ function SlotMachine({onBack,onAddScore}){
         if(newBoosters[c]?.id==="super_coin"){for(let r=0;r<3;r++)for(let cc=0;cc<3;cc++)if(newLocked[r][cc])newValues[r][cc]*=2;}
         if(newBoosters[c]?.id==="super_multi"){newGlobal*=3;}
       }
-      setCoinValues(newValues);setMultipliers(newMults);setGlobalMult(newGlobal);
 
-      // Check if grid is full → GRAND JACKPOT
+      setGrid(newGrid);setLocked(newLocked);setCoinValues(newValues);setBoosters(newBoosters);
+      setMultipliers(newMults);setGlobalMult(newGlobal);
+      setSpinning(false);
+
+      if(newCoin){setRespins(3);sfx.success?.();setFlash("⚡");setTimeout(()=>setFlash(null),600);}
+
+      // Grid full → GRAND
       let allFull=true;
       for(let r=0;r<3;r++)for(let c=0;c<3;c++)if(!newLocked[r][c])allFull=false;
-      if(allFull){
-        setFlash("🌩️");
-        setJackpot(SLOT_JACKPOTS[3]); // GRAND
-        sfx.achievement?.();
-      }
 
-      // Check if respins exhausted
-      if(!newCoin&&respins<=1){
-        // End bonus — calculate total
+      if(allFull||(!newCoin&&respins<=0)){
         setTimeout(()=>{
           let total=0;
           for(let r=0;r<3;r++)for(let c=0;c<3;c++){
             if(newLocked[r][c])total+=newValues[r][c]*newMults[c]*newGlobal;
           }
-          // Jackpot check (not grand — random based on coins)
           const coinCount=countCoins(newGrid);
-          if(!allFull&&coinCount>=6){setJackpot(SLOT_JACKPOTS[2]);total+=SLOT_JACKPOTS[2].mult*bet;} // Major
-          else if(!allFull&&coinCount>=5){setJackpot(SLOT_JACKPOTS[1]);total+=SLOT_JACKPOTS[1].mult*bet;} // Minor
-          else if(!allFull&&coinCount>=4&&Math.random()<0.5){setJackpot(SLOT_JACKPOTS[0]);total+=SLOT_JACKPOTS[0].mult*bet;} // Mini
-          if(allFull)total+=SLOT_JACKPOTS[3].mult*bet;
+          if(allFull){setJackpot(SLOT_JACKPOTS[3]);total+=SLOT_JACKPOTS[3].mult*bet;sfx.achievement?.();setFlash("🌩️");}
+          else if(coinCount>=6){setJackpot(SLOT_JACKPOTS[2]);total+=SLOT_JACKPOTS[2].mult*bet;}
+          else if(coinCount>=5){setJackpot(SLOT_JACKPOTS[1]);total+=SLOT_JACKPOTS[1].mult*bet;}
+          else if(coinCount>=4&&Math.random()<0.5){setJackpot(SLOT_JACKPOTS[0]);total+=SLOT_JACKPOTS[0].mult*bet;}
 
-          setTotalBonusWin(Math.round(total));
-          saveBalance(balance+Math.round(total));
-          setShowResult(true);
-          sfx.achievement?.();
-          setFlash("💰");setTimeout(()=>setFlash(null),1000);
-          // Save history
-          const entry={bet,win:Math.round(total),jackpot:jackpot?.id||null,time:Date.now()};
-          const h=[entry,...history].slice(0,20);setHistory(h);localStorage.setItem("hobbit_slot_history",JSON.stringify(h));
+          const win=Math.round(total);
+          setTotalBonusWin(win);addBalance(win);setShowResult(true);
+          sfx.achievement?.();setFlash("💰");setTimeout(()=>setFlash(null),1000);
+          const entry={bet,win,jackpot:null,time:Date.now()};
+          setHistory(h=>{const n=[entry,...h].slice(0,20);localStorage.setItem("hobbit_slot_history",JSON.stringify(n));return n;});
         },800);
       }
     },600);
   };
 
-  // End bonus and return to normal
   const endBonus=()=>{
     setBonusMode(false);setShowResult(false);setJackpot(null);
     setLocked(()=>{const l=[];for(let r=0;r<3;r++){l[r]=[];for(let c=0;c<3;c++)l[r][c]=false;}return l;});
@@ -1815,34 +1774,27 @@ function SlotMachine({onBack,onAddScore}){
     setBoosters([null,null,null]);setMultipliers([1,1,1]);setGlobalMult(1);
   };
 
-  // Buy bonus modes
   const buyBonus=(tier)=>{
     const costs={standard:30,ultra:75,thunder:150};
     const cost=costs[tier]*bet;
     if(balance<cost)return;
-    saveBalance(balance-cost);
-    sfx.coin?.();
-    // Pre-fill grid with coins and boosters
+    addBalance(-cost);sfx.coin?.();
     const newGrid=[];const initLocked=[];const initValues=[];
     const coinChance=tier==="thunder"?0.6:tier==="ultra"?0.45:0.35;
     for(let r=0;r<3;r++){newGrid[r]=[];initLocked[r]=[];initValues[r]=[];for(let c=0;c<3;c++){
       if(Math.random()<coinChance){
-        newGrid[r][c]=SLOT_SYMBOLS.find(s=>s.id==="coin");
-        initLocked[r][c]=true;
+        newGrid[r][c]=SLOT_SYMBOLS.find(s=>s.id==="coin");initLocked[r][c]=true;
         const valMult=tier==="thunder"?8:tier==="ultra"?5:3;
         initValues[r][c]=Math.floor(Math.random()*valMult+1)*bet;
       }else{newGrid[r][c]=randSym();initLocked[r][c]=false;initValues[r][c]=0;}
     }}
-    const newBoosters=tier==="thunder"
-      ?[SLOT_BOOSTERS[3],SLOT_BOOSTERS[2],SLOT_BOOSTERS[1]]
-      :tier==="ultra"
-        ?[SLOT_BOOSTERS[Math.floor(Math.random()*2)],randBooster(),SLOT_BOOSTERS[Math.floor(Math.random()*2)]]
-        :[randBooster(),randBooster(),randBooster()];
+    const newBoosters=tier==="thunder"?[SLOT_BOOSTERS[3],SLOT_BOOSTERS[2],SLOT_BOOSTERS[1]]
+      :tier==="ultra"?[SLOT_BOOSTERS[Math.floor(Math.random()*2)],randBooster(),SLOT_BOOSTERS[Math.floor(Math.random()*2)]]
+      :[randBooster(),randBooster(),randBooster()];
     setGrid(newGrid);setLocked(initLocked);setCoinValues(initValues);setBoosters(newBoosters);
     setMultipliers([1,1,1]);setGlobalMult(tier==="thunder"?2:1);
     setBonusMode(true);setRespins(3);setTotalBonusWin(0);setShowResult(false);setJackpot(null);
-    setFlash("⚡");setTimeout(()=>setFlash(null),800);
-    sfx.achievement?.();
+    setFlash("⚡");setTimeout(()=>setFlash(null),800);sfx.achievement?.();
   };
 
   const lightningGlow=bonusMode?"0 0 40px rgba(77,173,226,.3),0 0 80px rgba(77,173,226,.1)":"none";
@@ -1893,12 +1845,13 @@ function SlotMachine({onBack,onAddScore}){
             const sym=grid[row][col];
             const isLocked=locked[row][col];
             const coinVal=coinValues[row][col];
-            const isSpinning=spinReels[row];
+            // Column spinning: phase 1=all spin, phase 2=col0 stopped, phase 3=col0+1 stopped
+            const colSpinning=reelPhase===1||(reelPhase===2&&col>=1)||(reelPhase===3&&col>=2);
             const isWin=winLines.some(w=>w.row===row||(w.row==="diag1"&&row===col)||(w.row==="diag2"&&row+col===2));
-            return <div key={col} style={{aspectRatio:"1",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:isLocked?"rgba(77,173,226,.12)":isWin?"rgba(255,215,0,.08)":"rgba(0,0,0,.3)",border:`1.5px solid ${isLocked?"rgba(77,173,226,.5)":isWin?"rgba(255,215,0,.4)":"rgba(201,168,76,.08)"}`,borderRadius:6,transition:"all .3s",animation:isSpinning?"spin .3s linear infinite":isWin?"gP 1s ease infinite":"none",boxShadow:isLocked?`0 0 15px rgba(77,173,226,.3)${coinVal>bet*5?",0 0 30px rgba(255,215,0,.2)":""}`:isWin?`0 0 15px rgba(255,215,0,.3)`:"none",position:"relative"}}>
-              <span style={{fontSize:"clamp(1.5rem,6vw,2.2rem)",filter:isLocked?"drop-shadow(0 0 8px rgba(77,173,226,.6))":isWin?`drop-shadow(0 0 8px ${sym.color})`:"none",transition:"all .3s"}}>{sym.icon}</span>
-              {isLocked&&coinVal>0&&<div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"clamp(.4rem,1.5vw,.55rem)",color:"#4DADE2",textShadow:"0 0 8px rgba(77,173,226,.5)"}}>{coinVal}</div>}
-              {isLocked&&<div style={{position:"absolute",top:2,right:3,fontSize:".35rem",color:"rgba(77,173,226,.6)"}}>🔒</div>}
+            return <div key={col} style={{aspectRatio:"1",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,background:isLocked?"rgba(77,173,226,.15)":isWin?"rgba(255,215,0,.1)":"rgba(0,0,0,.35)",border:`2px solid ${isLocked?"rgba(77,173,226,.6)":isWin?"rgba(255,215,0,.5)":"rgba(201,168,76,.1)"}`,borderRadius:8,transition:"all .25s",position:"relative",boxShadow:isLocked?`0 0 20px rgba(77,173,226,.4)${coinVal>bet*5?",0 0 35px rgba(255,215,0,.3)":""}`:isWin?`0 0 20px rgba(255,215,0,.4)`:"none"}}>
+              <span style={{fontSize:"clamp(1.8rem,8vw,2.8rem)",filter:colSpinning?"blur(6px)":isLocked?"drop-shadow(0 0 10px rgba(77,173,226,.7))":isWin?`drop-shadow(0 0 10px ${sym.color})`:"none",transition:"filter .2s",opacity:colSpinning?.3:1,animation:isWin&&!colSpinning?"gP 1s ease infinite":"none"}}>{colSpinning?"❓":sym.icon}</span>
+              {isLocked&&coinVal>0&&!colSpinning&&<div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"clamp(.5rem,2vw,.7rem)",color:"#4DADE2",textShadow:"0 0 10px rgba(77,173,226,.6)",fontWeight:"bold"}}>{coinVal}🪙</div>}
+              {isLocked&&!colSpinning&&<div style={{position:"absolute",top:3,right:4,fontSize:".4rem",color:"rgba(77,173,226,.7)"}}>🔒</div>}
             </div>;
           })}
         </div>)}
@@ -1906,8 +1859,10 @@ function SlotMachine({onBack,onAddScore}){
     </div>
 
     {/* Win display */}
-    {lastWin>0&&!bonusMode&&<div style={{textAlign:"center",padding:"6px",background:"rgba(255,215,0,.06)",border:"1px solid rgba(255,215,0,.2)",borderRadius:4,animation:"popIn .3s ease"}}>
-      <span style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1rem",color:"#FFD700"}}>+{lastWin.toLocaleString()} 🪙</span>
+    {lastWin>0&&!bonusMode&&<div style={{textAlign:"center",padding:"14px",background:"linear-gradient(135deg,rgba(255,215,0,.08),rgba(201,168,76,.04))",border:"2px solid rgba(255,215,0,.4)",borderRadius:8,animation:"popIn .4s ease",boxShadow:"0 0 30px rgba(255,215,0,.15)"}}>
+      <div style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",color:"var(--gm)",letterSpacing:".1em",textTransform:"uppercase"}}>Nyeremény!</div>
+      <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.5rem",color:"#FFD700",textShadow:"0 0 20px rgba(255,215,0,.5)",animation:"gP 2s ease infinite",marginTop:4}}>+{lastWin.toLocaleString()} 🪙</div>
+      {winLines.map((w,i)=><div key={i} style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:w.symbol.color,marginTop:3}}>{w.symbol.icon}×3 = +{w.payout.toLocaleString()}</div>)}
     </div>}
 
     {/* Bonus mode UI */}
