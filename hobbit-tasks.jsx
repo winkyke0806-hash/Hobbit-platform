@@ -1189,6 +1189,381 @@ function TreasureGame(){
   </div>;
 }
 
+// ── 1v1 DUEL ─────────────────────────────────────────────────────────────────
+const DUEL_QUESTIONS=[
+  {q:"Hány törpe érkezett Bilbo házához?",opts:["11","12","13","14"],c:2},
+  {q:"Mi Gandalf másik neve?",opts:["Olórin","Saruman","Radagast","Pallando"],c:0},
+  {q:"Ki ölte meg Smaug-ot?",opts:["Thorin","Bard","Bilbo","Gandalf"],c:1},
+  {q:"Mi a neve Bilbo kardjának?",opts:["Glamdring","Orcrist","Fullánk","Andúril"],c:2},
+  {q:"Hol található Elrond háza?",opts:["Lothlórien","Völgyzugoly","Gondor","Fangorn"],c:1},
+  {q:"Mi Thorin vezetékneve?",opts:["Vasláb","Tölgypaizs","Kőláb","Vasöklű"],c:1},
+  {q:"Milyen lény Gollam eredetileg?",opts:["Törpe","Hobbit","Tünde","Ember"],c:1},
+  {q:"Mi a Gyűrű felirata?",opts:["Egy Gyűrű mind felett","A hatalom gyűrűje","Sauron akarata","Az árnyak ura"],c:0},
+  {q:"Ki a törpék királya a Hobbitban?",opts:["Dáin","Thorin","Balin","Glóin"],c:1},
+  {q:"Hány gyűrűt kaptak a törpék?",opts:["3","7","9","1"],c:1},
+  {q:"Mi a neve a Magányos Hegynek?",opts:["Mordor","Erebor","Moria","Isengard"],c:1},
+  {q:"Ki Legolas apja?",opts:["Elrond","Thranduil","Celeborn","Gil-galad"],c:1},
+  {q:"Milyen színű Gandalf köpenye a Hobbitban?",opts:["Fehér","Szürke","Kék","Barna"],c:1},
+  {q:"Ki készítette a Gyűrűket?",opts:["Sauron","Celebrimbor","Fëanor","Aulë"],c:1},
+  {q:"Hány Istari (varázsló) érkezett Középföldére?",opts:["3","4","5","7"],c:2},
+  {q:"Mi a neve Gollam másik személyiségének?",opts:["Déagol","Sméagol","Slinker","Stinker"],c:1},
+  {q:"Melyik nép építette Moriát?",opts:["Tündék","Törpék","Emberek","Orkok"],c:1},
+  {q:"Ki a Sötét Úr?",opts:["Morgoth","Sauron","Saruman","Boszorkányúr"],c:1},
+  {q:"Mi a neve Frodo kardjának?",opts:["Fullánk","Glamdring","Orcrist","Narsil"],c:0},
+  {q:"Hol lakik Bilbo?",opts:["Zsákos-domb","Bree","Gondor","Esgaroth"],c:0},
+  {q:"Ki Aragorn felesége?",opts:["Galadriel","Éowyn","Arwen","Tauriel"],c:2},
+  {q:"Mi a neve a Hobbit könyv szerzőjének?",opts:["C.S. Lewis","J.R.R. Tolkien","George R.R. Martin","Terry Pratchett"],c:1},
+  {q:"Milyen faj Treebeard (Szilszakáll)?",opts:["Tünde","Ent","Törpe","Maia"],c:1},
+  {q:"Hány tagja van a Gyűrű Szövetségének?",opts:["7","8","9","10"],c:2},
+  {q:"Mi a neve Aragorn kardjának?",opts:["Glamdring","Orcrist","Andúril","Fullánk"],c:2},
+  {q:"Melyik hegység alatt található Moria?",opts:["Ködös Hegység","Magányos Hegy","Vasdombok","Fehér Hegység"],c:0},
+  {q:"Ki a Rohirrim királya a Gyűrűk Urában?",opts:["Éomer","Théoden","Denethor","Faramir"],c:1},
+  {q:"Mi a Megye fővárosa?",opts:["Hobbiton","Buckland","Michel Delving","Bree"],c:2},
+  {q:"Hány Nazgûl van?",opts:["5","7","9","13"],c:2},
+  {q:"Ki találta meg a Gyűrűt a folyóban?",opts:["Sméagol","Déagol","Bilbo","Isildur"],c:1},
+  {q:"Melyik városban él Bard?",opts:["Gondor","Esgaroth","Dale","Bree"],c:1},
+  {q:"Mi a Szilmarilok?",opts:["Gyűrűk","Drágakövek","Kardok","Koronák"],c:1},
+  {q:"Ki Gimli apja?",opts:["Balin","Glóin","Dwalin","Óin"],c:1},
+  {q:"Mi Galadriel ajándéka Gimli-nek?",opts:["Kard","Mithril ing","Három hajszál","Pajzs"],c:2},
+  {q:"Hol pusztult el a Gyűrű?",opts:["Mordor","Moria","Isengard","Erebor"],c:0},
+];
+
+function DuelMode({onBack}){
+  const user=useState(()=>{try{return JSON.parse(localStorage.getItem("hobbit_current"));}catch{return null;}})[0];
+  const myName=user?.adventureName||"Névtelen";
+  const myRace=user?.race||"human";
+  const [myElo,setMyElo]=useState(1000);
+  const [phase,setPhase]=useState("select"); // select | searching | playing | results
+  const [mode,setMode]=useState("normal"); // normal | risky
+  const [opponent,setOpponent]=useState(null);
+  const [questions,setQuestions]=useState([]);
+  const [qIdx,setQIdx]=useState(0);
+  const [timer,setTimer]=useState(15);
+  const [myScore,setMyScore]=useState(0);
+  const [opScore,setOpScore]=useState(0);
+  const [myAnswers,setMyAnswers]=useState([]);
+  const [opAnswers,setOpAnswers]=useState([]);
+  const [answered,setAnswered]=useState(false);
+  const [matchRef,setMatchRef]=useState(null);
+  const [eloChange,setEloChange]=useState(0);
+  const [searchTimer,setSearchTimer]=useState(0);
+  const timerRef=useRef(null);
+  const searchRef=useRef(null);
+
+  // Load ELO from Firebase
+  useEffect(()=>{
+    try{
+      const {getDatabase,ref:fbRef,get}=window.__fbDB||{};
+      if(!getDatabase)return;
+      const db=getDatabase();
+      get(fbRef(db,`users/${myName}/profile/elo`)).then(s=>{if(s.val())setMyElo(s.val());});
+    }catch(e){}
+  },[]);
+
+  // Cleanup on unmount
+  useEffect(()=>{
+    return ()=>{
+      if(timerRef.current)clearInterval(timerRef.current);
+      if(searchRef.current)clearInterval(searchRef.current);
+      // Remove from queue
+      try{
+        const {getDatabase,ref:fbRef,remove}=window.__fbDB||{};
+        if(getDatabase){const db=getDatabase();remove(fbRef(db,`duel_queue/${myName}`));}
+      }catch(e){}
+    };
+  },[]);
+
+  // Pick random questions
+  const pickQuestions=()=>{
+    const shuffled=[...DUEL_QUESTIONS].sort(()=>Math.random()-.5);
+    return shuffled.slice(0,7);
+  };
+
+  // Start matchmaking
+  const startSearch=()=>{
+    setPhase("searching");setSearchTimer(0);
+    try{
+      const {getDatabase,ref:fbRef,set,onValue,off,remove,get}=window.__fbDB||{};
+      if(!getDatabase)return;
+      const db=getDatabase();
+      // Add self to queue
+      set(fbRef(db,`duel_queue/${myName}`),{name:myName,race:myRace,elo:myElo,mode,ts:Date.now()});
+      // Listen for queue
+      const qRef=fbRef(db,"duel_queue");
+      const checkMatch=()=>{
+        get(qRef).then(snap=>{
+          const data=snap.val()||{};
+          const candidates=Object.values(data).filter(p=>p.mode===mode&&p.name!==myName);
+          if(candidates.length>0){
+            // Found opponent!
+            const op=candidates[0];
+            off(qRef);
+            if(searchRef.current)clearInterval(searchRef.current);
+            // Create match — lower name creates it
+            const qs=pickQuestions();
+            const mid=[myName,op.name].sort().join("_")+"_"+Date.now();
+            const matchData={players:{[myName]:{name:myName,race:myRace,elo:myElo},[op.name]:{name:op.name,race:op.race,elo:op.elo}},mode,questions:qs.map((_,i)=>i),questionData:qs,status:"playing",created:Date.now(),answers:{},scores:{}};
+            set(fbRef(db,`duel_matches/${mid}`),matchData);
+            remove(fbRef(db,`duel_queue/${myName}`));
+            remove(fbRef(db,`duel_queue/${op.name}`));
+            setOpponent(op);setQuestions(qs);setMatchRef(mid);setPhase("playing");setQIdx(0);setTimer(15);setAnswered(false);
+            startQuestionTimer();
+            // Listen for opponent answers
+            onValue(fbRef(db,`duel_matches/${mid}/answers/${op.name}`),(s)=>{
+              const ans=s.val();if(ans){setOpAnswers(Object.values(ans));}
+            });
+            onValue(fbRef(db,`duel_matches/${mid}/scores/${op.name}`),(s)=>{
+              const sc=s.val();if(typeof sc==="number")setOpScore(sc);
+            });
+          }
+        });
+      };
+      // Poll every 2 seconds
+      checkMatch();
+      searchRef.current=setInterval(()=>{
+        setSearchTimer(t=>t+2);
+        checkMatch();
+      },2000);
+      // After 12s offer bot
+    }catch(e){}
+  };
+
+  // Bot match (after timeout)
+  const startBotMatch=()=>{
+    if(searchRef.current)clearInterval(searchRef.current);
+    try{const {getDatabase,ref:fbRef,remove}=window.__fbDB||{};if(getDatabase){const db=getDatabase();remove(fbRef(db,`duel_queue/${myName}`));}}catch(e){}
+    const botElo=myElo+Math.floor(Math.random()*200-100);
+    const botNames=["Gandalf Bot","Smaug AI","Gollam Bot","Thorin Bot","Elrond AI","Azog Bot"];
+    const bot={name:botNames[Math.floor(Math.random()*botNames.length)],race:["hobbit","dwarf","elf","human","wizard"][Math.floor(Math.random()*5)],elo:Math.max(100,botElo),isBot:true};
+    const qs=pickQuestions();
+    setOpponent(bot);setQuestions(qs);setPhase("playing");setQIdx(0);setTimer(15);setAnswered(false);
+    startQuestionTimer();
+  };
+
+  // Question timer
+  const startQuestionTimer=()=>{
+    if(timerRef.current)clearInterval(timerRef.current);
+    setTimer(15);setAnswered(false);
+    timerRef.current=setInterval(()=>{
+      setTimer(t=>{
+        if(t<=1){clearInterval(timerRef.current);return 0;}
+        return t-1;
+      });
+    },1000);
+  };
+
+  // Handle timeout
+  useEffect(()=>{
+    if(phase==="playing"&&timer===0&&!answered){
+      handleAnswer(-1);
+    }
+  },[timer]);
+
+  // Answer a question
+  const handleAnswer=(idx)=>{
+    if(answered||phase!=="playing")return;
+    setAnswered(true);
+    if(timerRef.current)clearInterval(timerRef.current);
+    const q=questions[qIdx];
+    const correct=idx===q.c;
+    const pts=correct?100+Math.round(timer*3.3):0; // max ~150pts per Q
+    const newScore=myScore+pts;
+    setMyScore(newScore);
+    setMyAnswers(prev=>[...prev,{idx,correct,pts}]);
+    // Save to Firebase if real match
+    if(matchRef){
+      try{
+        const {getDatabase,ref:fbRef,set}=window.__fbDB||{};
+        if(getDatabase){const db=getDatabase();
+          set(fbRef(db,`duel_matches/${matchRef}/answers/${myName}/${qIdx}`),{idx,correct,pts});
+          set(fbRef(db,`duel_matches/${matchRef}/scores/${myName}`),newScore);
+        }
+      }catch(e){}
+    }
+    // Bot answer simulation
+    if(opponent?.isBot){
+      const botCorrect=Math.random()<0.6;
+      const botPts=botCorrect?100+Math.floor(Math.random()*40):0;
+      setTimeout(()=>setOpScore(s=>s+botPts),500);
+    }
+    // Next question after delay
+    setTimeout(()=>{
+      if(qIdx<questions.length-1){
+        setQIdx(i=>i+1);startQuestionTimer();
+      }else{
+        finishDuel(newScore);
+      }
+    },1500);
+  };
+
+  // Finish duel
+  const finishDuel=(finalScore)=>{
+    const opFinal=opScore; // opponent's score at this point
+    const K=mode==="risky"?50:20;
+    const expected=1/(1+Math.pow(10,(opponent.elo-myElo)/400));
+    const result=finalScore>opFinal?1:finalScore===opFinal?0.5:0;
+    const change=Math.round(K*(result-expected));
+    setEloChange(change);
+    const newElo=Math.max(0,myElo+change);
+    setMyElo(newElo);
+    // Save to Firebase
+    try{
+      const {getDatabase,ref:fbRef,set}=window.__fbDB||{};
+      if(getDatabase){const db=getDatabase();
+        set(fbRef(db,`users/${myName}/profile/elo`),newElo);
+        if(matchRef)set(fbRef(db,`duel_matches/${matchRef}/status`),"done");
+      }
+    }catch(e){}
+    setPhase("results");
+    sfx.achievement?.();
+  };
+
+  const modeColor=mode==="risky"?"#E53935":"#4DADE2";
+  const RACES_MAP={hobbit:"🧑‍🌾",dwarf:"⛏️",elf:"🌿",human:"⚔️",wizard:"🔮"};
+
+  // ─── SELECT PHASE ───
+  if(phase==="select")return <div style={{padding:"20px 16px",display:"flex",flexDirection:"column",gap:16,flex:1}}>
+    <button onClick={onBack} style={{alignSelf:"flex-start",background:"none",border:"1px solid rgba(201,168,76,.2)",color:"var(--gm)",padding:"4px 12px",fontFamily:"'Cinzel',serif",fontSize:".6rem",cursor:"pointer"}}>← Vissza</button>
+    <div style={{textAlign:"center"}}>
+      <div style={{fontSize:"2.5rem",marginBottom:8}}>⚔️</div>
+      <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.1rem",color:"var(--gold)",letterSpacing:".1em"}}>1v1 Párbaj</div>
+      <div style={{fontFamily:"'EB Garamond',serif",fontSize:".85rem",color:"var(--td)",fontStyle:"italic",marginTop:4}}>Tolkien tudáspróba — mérd össze tudásod!</div>
+      <div style={{fontFamily:"'Cinzel',serif",fontSize:".6rem",color:"var(--gm)",marginTop:6}}>ELO: <span style={{color:"var(--gold)",fontSize:".75rem"}}>{myElo}</span></div>
+    </div>
+    {/* Mode select */}
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",letterSpacing:".14em",color:"var(--gm)",textTransform:"uppercase",textAlign:"center"}}>— Játékmód —</div>
+      {[{id:"normal",label:"Normál Ranked",desc:"Biztonságos — kevesebb ELO kockázat",icon:"🛡️",color:"#4DADE2",elo:"±15-25 ELO"},{id:"risky",label:"Risky Ranked",desc:"Kockázatos — dupla ELO tét!",icon:"🔥",color:"#E53935",elo:"±40-60 ELO"}].map(m=>
+        <button key={m.id} onClick={()=>setMode(m.id)} style={{padding:"16px",background:mode===m.id?`${m.color}12`:"rgba(0,0,0,.2)",border:`2px solid ${mode===m.id?m.color:"rgba(201,168,76,.1)"}`,display:"flex",alignItems:"center",gap:14,cursor:"pointer",transition:"all .3s",borderRadius:6}}>
+          <span style={{fontSize:"2rem"}}>{m.icon}</span>
+          <div style={{flex:1,textAlign:"left"}}>
+            <div style={{fontFamily:"'Cinzel',serif",fontSize:".78rem",color:mode===m.id?m.color:"var(--text)",letterSpacing:".05em"}}>{m.label}</div>
+            <div style={{fontFamily:"'EB Garamond',serif",fontSize:".78rem",color:"var(--gm)",fontStyle:"italic"}}>{m.desc}</div>
+          </div>
+          <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".55rem",color:m.color,padding:"4px 10px",background:`${m.color}15`,border:`1px solid ${m.color}44`,borderRadius:12,whiteSpace:"nowrap"}}>{m.elo}</div>
+        </button>
+      )}
+    </div>
+    <button onClick={startSearch} style={{padding:"14px",background:`${modeColor}15`,border:`2px solid ${modeColor}`,color:modeColor,fontFamily:"'Cinzel Decorative',serif",fontSize:".9rem",cursor:"pointer",letterSpacing:".1em",borderRadius:6,transition:"all .3s"}}>Ellenfél Keresése ⚔️</button>
+    {/* Rules */}
+    <div style={{padding:"12px",background:"rgba(0,0,0,.2)",border:"1px solid rgba(201,168,76,.1)",borderRadius:4}}>
+      <div style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:"var(--gm)",letterSpacing:".1em",textTransform:"uppercase",marginBottom:6}}>Szabályok</div>
+      <div style={{fontFamily:"'EB Garamond',serif",fontSize:".78rem",color:"var(--td)",lineHeight:1.6}}>
+        • 7 Tolkien kérdés, kérdésenként 15 másodperc<br/>
+        • Gyorsabb válasz = több pont (max 150/kérdés)<br/>
+        • Normál: ±15-25 ELO • Risky: ±40-60 ELO<br/>
+        • Ha nem válaszolsz időben: 0 pont
+      </div>
+    </div>
+  </div>;
+
+  // ─── SEARCHING PHASE ───
+  if(phase==="searching")return <div style={{padding:"20px 16px",display:"flex",flexDirection:"column",gap:16,flex:1,alignItems:"center",justifyContent:"center"}}>
+    <div style={{fontSize:"3rem",animation:"gP 2s ease infinite"}}>⚔️</div>
+    <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1rem",color:"var(--gold)",letterSpacing:".1em"}}>Ellenfél keresése...</div>
+    <div style={{fontFamily:"'Cinzel',serif",fontSize:".65rem",color:modeColor,padding:"4px 14px",background:`${modeColor}12`,border:`1px solid ${modeColor}44`,borderRadius:12}}>{mode==="risky"?"🔥 Risky Ranked":"🛡️ Normál Ranked"}</div>
+    <div style={{fontFamily:"'Cinzel',serif",fontSize:".7rem",color:"var(--gm)"}}>{searchTimer}s</div>
+    <div style={{width:60,height:60,border:"3px solid rgba(201,168,76,.15)",borderTop:`3px solid ${modeColor}`,borderRadius:"50%",animation:"spin 1s linear infinite"}}/>
+    {searchTimer>=10&&<button onClick={startBotMatch} style={{padding:"10px 20px",background:"rgba(201,168,76,.08)",border:"1px solid rgba(201,168,76,.3)",color:"var(--gold)",fontFamily:"'Cinzel',serif",fontSize:".7rem",cursor:"pointer",borderRadius:4}}>Bot ellenfél ⚡</button>}
+    <button onClick={()=>{if(searchRef.current)clearInterval(searchRef.current);try{const {getDatabase,ref:fbRef,remove}=window.__fbDB||{};if(getDatabase){const db=getDatabase();remove(fbRef(db,`duel_queue/${myName}`));}}catch(e){}setPhase("select");}} style={{padding:"8px 16px",background:"none",border:"1px solid rgba(229,57,53,.3)",color:"#EF9A9A",fontFamily:"'Cinzel',serif",fontSize:".6rem",cursor:"pointer",borderRadius:4}}>Mégse</button>
+  </div>;
+
+  // ─── PLAYING PHASE ───
+  if(phase==="playing"){
+    const q=questions[qIdx];
+    const progress=(qIdx/questions.length)*100;
+    return <div style={{padding:"16px 14px",display:"flex",flexDirection:"column",gap:12,flex:1}}>
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <span style={{fontSize:"1.1rem"}}>{RACES_MAP[myRace]||"⚔️"}</span>
+          <div>
+            <div style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",color:"var(--gold)"}}>{myName}</div>
+            <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".8rem",color:"#66BB6A"}}>{myScore}</div>
+          </div>
+        </div>
+        <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.6rem",color:timer<=5?"#E53935":"var(--gold)",animation:timer<=5?"gP .5s ease infinite":"none",transition:"color .3s"}}>{timer}</div>
+        <div style={{display:"flex",alignItems:"center",gap:6,flexDirection:"row-reverse"}}>
+          <span style={{fontSize:"1.1rem"}}>{RACES_MAP[opponent?.race]||"⚔️"}</span>
+          <div style={{textAlign:"right"}}>
+            <div style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",color:"#EF9A9A"}}>{opponent?.name}</div>
+            <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".8rem",color:"#EF9A9A"}}>{opScore}</div>
+          </div>
+        </div>
+      </div>
+      {/* Progress bar */}
+      <div style={{height:4,background:"rgba(201,168,76,.1)",borderRadius:2,overflow:"hidden"}}>
+        <div style={{height:"100%",width:`${progress}%`,background:modeColor,transition:"width .3s",borderRadius:2}}/>
+      </div>
+      <div style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:"var(--gm)",textAlign:"center"}}>{qIdx+1} / {questions.length}</div>
+      {/* Question */}
+      <div style={{padding:"18px 16px",background:"rgba(201,168,76,.04)",border:"1px solid rgba(201,168,76,.18)",borderRadius:6,textAlign:"center"}}>
+        <div style={{fontFamily:"'EB Garamond',serif",fontSize:"1.05rem",color:"var(--text)",lineHeight:1.5}}>{q.q}</div>
+      </div>
+      {/* Answers */}
+      <div style={{display:"flex",flexDirection:"column",gap:8,flex:1}}>
+        {q.opts.map((opt,i)=>{
+          const isCorrect=i===q.c;
+          const isSelected=answered&&myAnswers[qIdx]?.idx===i;
+          const showResult=answered;
+          let bg="rgba(0,0,0,.25)";let bc="rgba(201,168,76,.12)";let col="var(--text)";
+          if(showResult&&isCorrect){bg="rgba(102,187,106,.12)";bc="#66BB6A";col="#66BB6A";}
+          if(showResult&&isSelected&&!isCorrect){bg="rgba(229,57,53,.12)";bc="#E53935";col="#EF9A9A";}
+          return <button key={i} onClick={()=>handleAnswer(i)} disabled={answered} style={{padding:"14px 16px",background:bg,border:`1.5px solid ${bc}`,color:col,fontFamily:"'EB Garamond',serif",fontSize:".92rem",cursor:answered?"default":"pointer",borderRadius:5,transition:"all .2s",textAlign:"left",opacity:showResult&&!isCorrect&&!isSelected?.4:1}}>
+            <span style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",color:"var(--gm)",marginRight:8}}>{["A","B","C","D"][i]}.</span>{opt}
+          </button>;
+        })}
+      </div>
+      {/* Timer bar */}
+      <div style={{height:3,background:"rgba(201,168,76,.08)",borderRadius:2,overflow:"hidden"}}>
+        <div style={{height:"100%",width:`${(timer/15)*100}%`,background:timer<=5?"#E53935":modeColor,transition:"width 1s linear",borderRadius:2}}/>
+      </div>
+    </div>;
+  }
+
+  // ─── RESULTS PHASE ───
+  if(phase==="results"){
+    const won=myScore>opScore;const draw=myScore===opScore;
+    return <div style={{padding:"20px 16px",display:"flex",flexDirection:"column",gap:16,flex:1,alignItems:"center",justifyContent:"center"}}>
+      <div style={{fontSize:"3.5rem",animation:"popIn .5s ease"}}>{won?"🏆":draw?"🤝":"💀"}</div>
+      <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.2rem",color:won?"#FFD700":draw?"#4DADE2":"#EF9A9A",letterSpacing:".12em"}}>{won?"Győzelem!":draw?"Döntetlen!":"Vereség!"}</div>
+      <div style={{fontFamily:"'Cinzel',serif",fontSize:".65rem",color:modeColor,padding:"3px 12px",background:`${modeColor}12`,border:`1px solid ${modeColor}44`,borderRadius:12}}>{mode==="risky"?"🔥 Risky":"🛡️ Normál"}</div>
+      {/* Score comparison */}
+      <div style={{display:"flex",gap:24,alignItems:"center"}}>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:"1.2rem"}}>{RACES_MAP[myRace]||"⚔️"}</div>
+          <div style={{fontFamily:"'Cinzel',serif",fontSize:".6rem",color:"var(--gold)"}}>{myName}</div>
+          <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.5rem",color:"#66BB6A"}}>{myScore}</div>
+        </div>
+        <div style={{fontFamily:"'Cinzel',serif",fontSize:".7rem",color:"var(--gm)"}}>VS</div>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:"1.2rem"}}>{RACES_MAP[opponent?.race]||"⚔️"}</div>
+          <div style={{fontFamily:"'Cinzel',serif",fontSize:".6rem",color:"#EF9A9A"}}>{opponent?.name}</div>
+          <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.5rem",color:"#EF9A9A"}}>{opScore}</div>
+        </div>
+      </div>
+      {/* ELO change */}
+      <div style={{padding:"12px 24px",background:eloChange>=0?"rgba(102,187,106,.08)":"rgba(229,57,53,.08)",border:`1px solid ${eloChange>=0?"rgba(102,187,106,.3)":"rgba(229,57,53,.3)"}`,borderRadius:8,textAlign:"center"}}>
+        <div style={{fontFamily:"'Cinzel',serif",fontSize:".55rem",color:"var(--gm)",letterSpacing:".08em"}}>ELO VÁLTOZÁS</div>
+        <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"1.8rem",color:eloChange>=0?"#66BB6A":"#E53935"}}>{eloChange>=0?"+":""}{eloChange}</div>
+        <div style={{fontFamily:"'Cinzel',serif",fontSize:".6rem",color:"var(--gm)"}}>Új ELO: <span style={{color:"var(--gold)"}}>{myElo}</span></div>
+      </div>
+      {/* Answers review */}
+      <div style={{width:"100%",display:"flex",flexDirection:"column",gap:4}}>
+        <div style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:"var(--gm)",letterSpacing:".1em",textTransform:"uppercase"}}>Válaszaid</div>
+        <div style={{display:"flex",gap:4}}>
+          {myAnswers.map((a,i)=><div key={i} style={{flex:1,height:6,borderRadius:3,background:a.correct?"#66BB6A":"#E53935"}}/>)}
+        </div>
+      </div>
+      <div style={{display:"flex",gap:10,width:"100%"}}>
+        <button onClick={()=>{setPhase("select");setMyScore(0);setOpScore(0);setMyAnswers([]);setOpAnswers([]);setQIdx(0);setMatchRef(null);setOpponent(null);}} style={{flex:1,padding:"12px",background:`${modeColor}12`,border:`1px solid ${modeColor}`,color:modeColor,fontFamily:"'Cinzel',serif",fontSize:".72rem",cursor:"pointer",borderRadius:4}}>Újra ⚔️</button>
+        <button onClick={onBack} style={{flex:1,padding:"12px",background:"none",border:"1px solid rgba(201,168,76,.2)",color:"var(--gm)",fontFamily:"'Cinzel',serif",fontSize:".72rem",cursor:"pointer",borderRadius:4}}>Vissza</button>
+      </div>
+    </div>;
+  }
+  return null;
+}
+
 function TavernChat(){
   const [messages,setMessages]=useState([]);
   const [input,setInput]=useState("");
@@ -1258,6 +1633,7 @@ function TavernChat(){
 
 function MiniGamesTab(){
   const [activeGame,setActiveGame]=useState(null);
+  const [showDuel,setShowDuel]=useState(false);
   const [carouselIdx,setCarouselIdx]=useState(0);
   const touchRef=useRef(null);
   const games=[
@@ -1274,6 +1650,7 @@ function MiniGamesTab(){
     setActiveGame(gid);
     try{const plays=JSON.parse(localStorage.getItem("hobbit_minigame_plays")||"{}");plays[gid]=(plays[gid]||0)+1;plays["_t_"+gid]=Date.now();localStorage.setItem("hobbit_minigame_plays",JSON.stringify(plays));}catch(e){}
   };
+  if(showDuel)return <div className="gentle-pop" style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}><DuelMode onBack={()=>setShowDuel(false)}/></div>;
   if(activeGame){
     const GAME_MAP={memory:MemoryGame,reaction:ReactionGame,wordsearch:WordSearch,riddle:RiddleGame,archery:ArcheryGame,treasure:TreasureGame};
     const GameComp=GAME_MAP[activeGame]||MemoryGame;
@@ -1311,6 +1688,8 @@ function MiniGamesTab(){
     <div style={{display:"flex",justifyContent:"center",gap:8,padding:"10px 0 8px",flexShrink:0}}>
       {games.map((g,i)=><button key={i} onClick={()=>setCarouselIdx(i)} style={{width:i===carouselIdx?20:8,height:8,borderRadius:4,background:i===carouselIdx?g.color:"rgba(201,168,76,.15)",border:"none",cursor:"pointer",transition:"all .3s"}}/>)}
     </div>
+    {/* Duel button */}
+    <button onClick={()=>setShowDuel(true)} style={{margin:"0 16px 8px",padding:"12px",background:"linear-gradient(135deg,rgba(77,173,226,.06),rgba(229,57,53,.04))",border:"1px solid rgba(201,168,76,.2)",display:"flex",alignItems:"center",justifyContent:"center",gap:10,cursor:"pointer",borderRadius:4,transition:"all .3s"}}><span style={{fontSize:"1.3rem"}}>⚔️</span><span style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".8rem",color:"var(--gold)",letterSpacing:".08em"}}>1v1 Párbaj</span><span style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:"var(--gm)",padding:"2px 8px",background:"rgba(201,168,76,.08)",border:"1px solid rgba(201,168,76,.15)",borderRadius:10}}>Ranked</span></button>
     {/* Global tavern chat */}
     <TavernChat/>
   </div>;
@@ -3431,6 +3810,7 @@ body{background:var(--bg);}
 @keyframes seasonIcon{0%,100%{transform:scale(1) rotate(0deg);filter:drop-shadow(0 0 8px currentColor)}50%{transform:scale(1.12) rotate(3deg);filter:drop-shadow(0 0 18px currentColor)}}
 @keyframes seasonBannerPulse{0%,100%{opacity:.85}50%{opacity:1}}
 @keyframes warTitle{0%,100%{text-shadow:0 0 15px rgba(198,40,40,.4),0 0 30px rgba(198,40,40,.2)}50%{text-shadow:0 0 25px rgba(198,40,40,.7),0 0 50px rgba(198,40,40,.3)}}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 @keyframes warUrgent{0%,100%{opacity:1}50%{opacity:.5}}
 .tab-content{animation:fadeSlideIn .35s cubic-bezier(.22,1,.36,1) both;}
 .card-flip{animation:cardFlip .35s ease both;}
