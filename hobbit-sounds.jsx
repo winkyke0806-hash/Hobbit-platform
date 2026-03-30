@@ -2,14 +2,14 @@
 
 // ── SFX (pre-loaded Audio elements) ─────────────────────────────────────────
 const SFX_FILES={
-  click:"/audio/sfx/click.mp3",
-  success:"/audio/sfx/success.mp3",
-  error:"/audio/sfx/error.mp3",
-  dice:"/audio/sfx/dice.mp3",
-  achievement:"/audio/sfx/achievement.mp3",
-  coin:"/audio/sfx/coin.mp3",
-  cardFlip:"/audio/sfx/card-flip.mp3",
-  notify:"/audio/sfx/notify.mp3",
+  click:"./audio/sfx/click.mp3",
+  success:"./audio/sfx/success.mp3",
+  error:"./audio/sfx/error.mp3",
+  dice:"./audio/sfx/dice.mp3",
+  achievement:"./audio/sfx/achievement.mp3",
+  coin:"./audio/sfx/coin.mp3",
+  cardFlip:"./audio/sfx/card-flip.mp3",
+  notify:"./audio/sfx/notify.mp3",
 };
 
 // Pre-load all SFX into Audio objects
@@ -41,9 +41,9 @@ const _playSfx=(key,vol)=>{
 
 // ── MUSIC (background, looped, crossfade) ───────────────────────────────────
 const MUSIC_TRACKS={
-  theme:"/audio/music/theme.mp3",
-  tavern:"/audio/music/tavern.mp3",
-  battle:"/audio/music/battle.mp3",
+  theme:"./audio/music/theme.mp3",
+  tavern:"./audio/music/tavern.mp3",
+  battle:"./audio/music/battle.mp3",
 };
 
 let _currentTrack=null;  // "theme"|"tavern"|"battle"|null
