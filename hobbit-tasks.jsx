@@ -1708,7 +1708,8 @@ function SlotMachine({onBack,onAddScore}){
   // BONUS RESPIN
   const doBonusRespin=()=>{
     if(spinning||respins<=0)return;
-    setSpinning(true);setRespins(r=>r-1);
+    const remainingRespins=respins-1; // track locally to avoid stale closure
+    setSpinning(true);setRespins(remainingRespins);
     sfx.dice?.();
 
     setTimeout(()=>{
@@ -1745,7 +1746,8 @@ function SlotMachine({onBack,onAddScore}){
       let allFull=true;
       for(let r=0;r<3;r++)for(let c=0;c<3;c++)if(!newLocked[r][c])allFull=false;
 
-      if(allFull||(!newCoin&&respins<=0)){
+      // End bonus when respins exhausted (use local var, not stale state) or grid full
+      if(allFull||(!newCoin&&remainingRespins<=0)){
         setTimeout(()=>{
           let total=0;
           for(let r=0;r<3;r++)for(let c=0;c<3;c++){
