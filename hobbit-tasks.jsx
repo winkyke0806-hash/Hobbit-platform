@@ -1799,7 +1799,7 @@ function SlotMachine({onBack,onAddScore}){
 
   const lightningGlow=bonusMode?"0 0 40px rgba(77,173,226,.3),0 0 80px rgba(77,173,226,.1)":"none";
 
-  return <div style={{padding:"12px",display:"flex",flexDirection:"column",gap:10,flex:1,position:"relative",overflow:"hidden"}}>
+  return <div style={{padding:"12px",display:"flex",flexDirection:"column",gap:8,flex:1,position:"relative",overflow:"auto",maxWidth:400,margin:"0 auto",width:"100%"}}>
     {/* Lightning flash overlay */}
     {flash&&<div style={{position:"absolute",inset:0,background:"radial-gradient(circle,rgba(77,173,226,.15),transparent 70%)",zIndex:10,pointerEvents:"none",animation:"popIn .3s ease",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"4rem"}}>{flash}</div>}
 
@@ -1833,28 +1833,25 @@ function SlotMachine({onBack,onAddScore}){
     </div>
 
     {/* GRID */}
-    <div style={{background:"rgba(0,0,0,.5)",border:`2px solid ${bonusMode?"rgba(77,173,226,.4)":"rgba(201,168,76,.15)"}`,borderRadius:8,padding:8,boxShadow:lightningGlow,transition:"all .5s"}}>
+    <div style={{background:"rgba(0,0,0,.5)",border:`2px solid ${bonusMode?"rgba(77,173,226,.4)":"rgba(201,168,76,.15)"}`,borderRadius:8,padding:8,boxShadow:lightningGlow,transition:"all .5s",maxWidth:320,margin:"0 auto",width:"100%"}}>
       {/* Multiplier indicators */}
       {bonusMode&&(globalMult>1||multipliers.some(m=>m>1))&&<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:4,marginBottom:4}}>
         {multipliers.map((m,i)=><div key={i} style={{textAlign:"center",fontFamily:"'Cinzel Decorative',serif",fontSize:".5rem",color:m*globalMult>1?"#B39DDB":"transparent"}}>×{m*globalMult}</div>)}
       </div>}
       {/* 3x3 Grid */}
-      <div style={{display:"grid",gridTemplateRows:"repeat(3,1fr)",gap:4}}>
-        {[0,1,2].map(row=><div key={row} style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:4}}>
-          {[0,1,2].map(col=>{
-            const sym=grid[row][col];
-            const isLocked=locked[row][col];
-            const coinVal=coinValues[row][col];
-            // Column spinning: phase 1=all spin, phase 2=col0 stopped, phase 3=col0+1 stopped
-            const colSpinning=reelPhase===1||(reelPhase===2&&col>=1)||(reelPhase===3&&col>=2);
-            const isWin=winLines.some(w=>w.row===row||(w.row==="diag1"&&row===col)||(w.row==="diag2"&&row+col===2));
-            return <div key={col} style={{aspectRatio:"1",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,background:isLocked?"rgba(77,173,226,.15)":isWin?"rgba(255,215,0,.1)":"rgba(0,0,0,.35)",border:`2px solid ${isLocked?"rgba(77,173,226,.6)":isWin?"rgba(255,215,0,.5)":"rgba(201,168,76,.1)"}`,borderRadius:8,transition:"all .25s",position:"relative",boxShadow:isLocked?`0 0 20px rgba(77,173,226,.4)${coinVal>bet*5?",0 0 35px rgba(255,215,0,.3)":""}`:isWin?`0 0 20px rgba(255,215,0,.4)`:"none"}}>
-              <span style={{fontSize:"clamp(1.8rem,8vw,2.8rem)",filter:colSpinning?"blur(6px)":isLocked?"drop-shadow(0 0 10px rgba(77,173,226,.7))":isWin?`drop-shadow(0 0 10px ${sym.color})`:"none",transition:"filter .2s",opacity:colSpinning?.3:1,animation:isWin&&!colSpinning?"gP 1s ease infinite":"none"}}>{colSpinning?"❓":sym.icon}</span>
-              {isLocked&&coinVal>0&&!colSpinning&&<div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:"clamp(.5rem,2vw,.7rem)",color:"#4DADE2",textShadow:"0 0 10px rgba(77,173,226,.6)",fontWeight:"bold"}}>{coinVal}🪙</div>}
-              {isLocked&&!colSpinning&&<div style={{position:"absolute",top:3,right:4,fontSize:".4rem",color:"rgba(77,173,226,.7)"}}>🔒</div>}
-            </div>;
-          })}
-        </div>)}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
+        {[0,1,2].map(row=>[0,1,2].map(col=>{
+          const sym=grid[row][col];
+          const isLocked=locked[row][col];
+          const coinVal=coinValues[row][col];
+          const colSpinning=reelPhase===1||(reelPhase===2&&col>=1)||(reelPhase===3&&col>=2);
+          const isWin=winLines.some(w=>w.row===row||(w.row==="diag1"&&row===col)||(w.row==="diag2"&&row+col===2));
+          return <div key={row+"_"+col} style={{height:85,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,background:isLocked?"rgba(77,173,226,.15)":isWin?"rgba(255,215,0,.1)":"rgba(0,0,0,.35)",border:`2px solid ${isLocked?"rgba(77,173,226,.6)":isWin?"rgba(255,215,0,.5)":"rgba(201,168,76,.1)"}`,borderRadius:8,transition:"all .25s",position:"relative",boxShadow:isLocked?`0 0 20px rgba(77,173,226,.4)`:isWin?`0 0 20px rgba(255,215,0,.4)`:"none"}}>
+            <span style={{fontSize:"2rem",filter:colSpinning?"blur(6px)":isLocked?"drop-shadow(0 0 10px rgba(77,173,226,.7))":isWin?`drop-shadow(0 0 10px ${sym.color})`:"none",transition:"filter .2s",opacity:colSpinning?.3:1,animation:isWin&&!colSpinning?"gP 1s ease infinite":"none"}}>{colSpinning?"❓":sym.icon}</span>
+            {isLocked&&coinVal>0&&!colSpinning&&<div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".55rem",color:"#4DADE2",textShadow:"0 0 10px rgba(77,173,226,.6)"}}>{coinVal}🪙</div>}
+            {isLocked&&!colSpinning&&<div style={{position:"absolute",top:2,right:3,fontSize:".35rem",color:"rgba(77,173,226,.7)"}}>🔒</div>}
+          </div>;
+        }))}
       </div>
     </div>
 
