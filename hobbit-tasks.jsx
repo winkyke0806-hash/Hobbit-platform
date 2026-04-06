@@ -4088,17 +4088,17 @@ export default function HobbitApp(){
       <div className="noise"/>
       <div style={{position:"relative",zIndex:10,height:"100vh",display:"flex",flexDirection:"column"}}>
         {/* Header */}
-        <header style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 20px",background:"rgba(8,6,4,.92)",borderBottom:"1px solid rgba(201,168,76,.12)",backdropFilter:"blur(8px)",flexShrink:0}}>
+        <header style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 20px",background:"linear-gradient(180deg,rgba(12,9,6,.96),rgba(8,6,4,.92))",borderBottom:"1px solid rgba(201,168,76,.18)",backdropFilter:"blur(12px)",flexShrink:0,boxShadow:"0 2px 20px rgba(0,0,0,.4)"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <span style={{fontFamily:"serif",color:"var(--gold)",opacity:.5}}>ᚠ</span>
-            <span style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".9rem",color:"var(--gold)"}}>A HOBBIT</span>
-            <span style={{fontFamily:"serif",color:"var(--gold)",opacity:.5}}>ᚠ</span>
+            <span style={{fontFamily:"serif",color:"var(--gold)",opacity:.4,animation:"runeFlicker 3s ease-in-out infinite"}}>ᚠ</span>
+            <span style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".9rem",color:"var(--gold)",textShadow:"0 0 20px rgba(201,168,76,.25)",letterSpacing:".05em"}}>A HOBBIT</span>
+            <span style={{fontFamily:"serif",color:"var(--gold)",opacity:.4,animation:"runeFlicker 3s ease-in-out infinite .5s"}}>ᚠ</span>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <button onClick={()=>{toggleMute();setMuted(isMuted());}} style={{background:"none",border:"1px solid rgba(201,168,76,.15)",color:muted?"var(--gm)":"var(--gold)",width:28,height:28,borderRadius:"50%",cursor:"pointer",fontSize:".8rem",display:"flex",alignItems:"center",justifyContent:"center",opacity:muted?.5:1,transition:"all .2s"}} title={muted?"Hang bekapcsolása":"Hang kikapcsolása"}>{muted?"🔇":"🔊"}</button>
-            <span style={{fontSize:".95rem"}}>{race.icon}</span>
+            <button onClick={()=>{toggleMute();setMuted(isMuted());}} style={{background:"none",border:"1px solid rgba(201,168,76,.15)",color:muted?"var(--gm)":"var(--gold)",width:28,height:28,borderRadius:"50%",cursor:"pointer",fontSize:".8rem",display:"flex",alignItems:"center",justifyContent:"center",opacity:muted?.5:1,transition:"all .3s"}} title={muted?"Hang bekapcsolása":"Hang kikapcsolása"}>{muted?"🔇":"🔊"}</button>
+            <span style={{fontSize:".95rem",filter:"drop-shadow(0 0 6px rgba(201,168,76,.3))"}}>{race.icon}</span>
             <span style={{fontFamily:"'Cinzel',serif",fontSize:".75rem",color:"var(--text)"}}>{user?.adventureName}</span>
-            <span style={{fontFamily:"'Cinzel',serif",fontSize:".7rem",color:"var(--gold)",padding:"2px 8px",border:"1px solid rgba(201,168,76,.26)",background:"rgba(201,168,76,.05)"}}>{totalScore}pt</span>
+            <span style={{fontFamily:"'Cinzel',serif",fontSize:".7rem",color:"var(--gold)",padding:"2px 10px",border:"1px solid rgba(201,168,76,.3)",background:"linear-gradient(135deg,rgba(201,168,76,.08),rgba(201,168,76,.02))",borderRadius:3,animation:"glowPulse 4s ease-in-out infinite"}}>{totalScore}pt</span>
           </div>
         </header>
 
@@ -4113,10 +4113,10 @@ export default function HobbitApp(){
         </ErrorCatch>
 
         {/* Bottom tab bar */}
-        <nav style={{display:"flex",borderTop:"1px solid rgba(201,168,76,.14)",background:"rgba(8,6,4,.95)",backdropFilter:"blur(10px)",flexShrink:0}}>
-          {TABS.map(t=><button key={t.id} onClick={()=>switchTab(t.id)} style={{flex:1,padding:"10px 4px 8px",background:"transparent",border:"none",borderTop:`2px solid ${tab===t.id?"var(--gold)":"transparent"}`,color:tab===t.id?"var(--gold)":"var(--gm)",fontFamily:"'Cinzel',serif",fontSize:".6rem",letterSpacing:".07em",cursor:"pointer",transition:"all .2s",display:"flex",flexDirection:"column",alignItems:"center",gap:3,textTransform:"uppercase"}}>
-            <span style={{fontSize:"1.2rem",filter:tab===t.id?"none":"grayscale(.5)",transition:"filter .2s"}}>{t.icon}</span>
-            {t.label}
+        <nav style={{display:"flex",borderTop:"1px solid rgba(201,168,76,.18)",background:"linear-gradient(0deg,rgba(12,9,6,.97),rgba(8,6,4,.93))",backdropFilter:"blur(12px)",flexShrink:0,boxShadow:"0 -2px 20px rgba(0,0,0,.3)"}}>
+          {TABS.map(t=><button key={t.id} onClick={()=>switchTab(t.id)} style={{flex:1,padding:"10px 4px 8px",background:tab===t.id?"linear-gradient(0deg,rgba(201,168,76,.06),transparent)":"transparent",border:"none",borderTop:`2px solid ${tab===t.id?"var(--gold)":"transparent"}`,color:tab===t.id?"var(--gold)":"var(--gm)",fontFamily:"'Cinzel',serif",fontSize:".6rem",letterSpacing:".07em",cursor:"pointer",transition:"all .3s",display:"flex",flexDirection:"column",alignItems:"center",gap:3,textTransform:"uppercase",position:"relative"}}>
+            <span style={{fontSize:"1.2rem",filter:tab===t.id?"drop-shadow(0 0 8px rgba(201,168,76,.5))":"grayscale(.5)",transition:"all .3s",transform:tab===t.id?"scale(1.1)":"scale(1)"}}>{t.icon}</span>
+            <span style={{animation:tab===t.id?"tabGlow 3s ease-in-out infinite":"none"}}>{t.label}</span>
           </button>)}
         </nav>
       </div>
@@ -4169,12 +4169,12 @@ body{background:var(--bg);}
 .root{height:100vh;background:radial-gradient(ellipse at 20% 20%,rgba(120,30,30,.06) 0%,transparent 55%),radial-gradient(ellipse at 80% 80%,rgba(60,35,100,.05) 0%,transparent 55%),var(--bg);font-family:'EB Garamond',serif;color:var(--text);position:relative;overflow:hidden;}
 .noise{position:fixed;inset:0;z-index:1;pointer-events:none;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");opacity:.4;}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-@keyframes fadeSlideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeSlideIn{from{opacity:0;transform:translateY(12px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
 @keyframes fadeSlideOut{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-8px)}}
-@keyframes popIn{from{opacity:0;transform:scale(.3)}to{opacity:1;transform:scale(1)}}
-@keyframes modalIn{from{opacity:0;transform:scale(.95) translateY(10px)}to{opacity:1;transform:none}}
+@keyframes popIn{0%{opacity:0;transform:scale(.5)}60%{opacity:1;transform:scale(1.08)}100%{transform:scale(1)}}
+@keyframes modalIn{from{opacity:0;transform:scale(.92) translateY(16px)}to{opacity:1;transform:none}}
 @keyframes cardFlip{0%{transform:rotateY(0deg) scale(1)}50%{transform:rotateY(90deg) scale(1.05)}100%{transform:rotateY(0deg) scale(1)}}
-@keyframes gentlePop{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:scale(1)}}
+@keyframes gentlePop{0%{opacity:0;transform:scale(.88)}60%{transform:scale(1.02)}100%{opacity:1;transform:scale(1)}}
 @keyframes achieveSlideIn{from{opacity:0;transform:translateX(-50%) translateY(-30px) scale(.9)}to{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}}
 @keyframes achieveIconPop{0%{transform:scale(0) rotate(-20deg)}60%{transform:scale(1.3) rotate(5deg)}100%{transform:scale(1) rotate(0)}}
 @keyframes achieveStar{0%,100%{transform:scale(1);opacity:.8}50%{transform:scale(1.15);opacity:1}}
@@ -4184,27 +4184,38 @@ body{background:var(--bg);}
 @keyframes warTitle{0%,100%{text-shadow:0 0 15px rgba(198,40,40,.4),0 0 30px rgba(198,40,40,.2)}50%{text-shadow:0 0 25px rgba(198,40,40,.7),0 0 50px rgba(198,40,40,.3)}}
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 @keyframes warUrgent{0%,100%{opacity:1}50%{opacity:.5}}
-.tab-content{animation:fadeSlideIn .35s cubic-bezier(.22,1,.36,1) both;}
+@keyframes glowPulse{0%,100%{box-shadow:0 0 8px rgba(201,168,76,.15),0 0 20px rgba(201,168,76,.05)}50%{box-shadow:0 0 16px rgba(201,168,76,.3),0 0 40px rgba(201,168,76,.1)}}
+@keyframes goldShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@keyframes floatUp{0%{opacity:0;transform:translateY(8px)}20%{opacity:1}80%{opacity:1}100%{opacity:0;transform:translateY(-20px)}}
+@keyframes borderGlow{0%,100%{border-color:rgba(201,168,76,.12)}50%{border-color:rgba(201,168,76,.35)}}
+@keyframes iconBounce{0%,100%{transform:translateY(0)}30%{transform:translateY(-3px)}60%{transform:translateY(1px)}}
+@keyframes slideInRight{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+@keyframes tabGlow{0%,100%{text-shadow:0 0 0 transparent}50%{text-shadow:0 0 12px rgba(201,168,76,.4)}}
+.tab-content{animation:fadeSlideIn .4s cubic-bezier(.22,1,.36,1) both;}
 .card-flip{animation:cardFlip .35s ease both;}
-.gentle-pop{animation:gentlePop .3s cubic-bezier(.22,1,.36,1) both;}
+.gentle-pop{animation:gentlePop .35s cubic-bezier(.22,1,.36,1) both;}
 @keyframes emFl{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
-@keyframes nodePulse{0%,100%{transform:translate(-50%,-50%) scale(1);opacity:.25}50%{transform:translate(-50%,-50%) scale(1.5);opacity:.08}}
+@keyframes nodePulse{0%,100%{transform:translate(-50%,-50%) scale(1);opacity:.3}50%{transform:translate(-50%,-50%) scale(1.8);opacity:.05}}
 @keyframes runeFlicker{0%,100%{opacity:.5}50%{opacity:.15}}
 
-.btn-start{display:flex;align-items:center;gap:12px;padding:12px 26px;background:linear-gradient(135deg,rgba(201,168,76,.11),rgba(201,168,76,.04));border:1px solid var(--tc,var(--gold));color:var(--gb);font-family:'Cinzel',serif;font-size:.85rem;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;transition:all .2s;}
-.btn-start:hover{background:rgba(201,168,76,.16);box-shadow:0 0 26px rgba(201,168,76,.18);transform:translateY(-1px);}
+.btn-start{display:flex;align-items:center;gap:12px;padding:12px 26px;background:linear-gradient(135deg,rgba(201,168,76,.12),rgba(201,168,76,.04));border:1px solid var(--tc,var(--gold));color:var(--gb);font-family:'Cinzel',serif;font-size:.85rem;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;transition:all .3s cubic-bezier(.22,1,.36,1);position:relative;overflow:hidden;}
+.btn-start::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(201,168,76,.08),transparent);background-size:200% 100%;animation:goldShimmer 4s ease infinite;pointer-events:none;}
+.btn-start:hover{background:rgba(201,168,76,.18);box-shadow:0 0 30px rgba(201,168,76,.2),0 0 60px rgba(201,168,76,.05);transform:translateY(-2px);}
+.btn-start:active{transform:translateY(0);box-shadow:0 0 15px rgba(201,168,76,.15);}
 .btn-start span{font-family:serif;opacity:.5;animation:runeFlicker 2s ease-in-out infinite;}
-.btn-nq{padding:9px 22px;background:linear-gradient(135deg,rgba(201,168,76,.09),rgba(201,168,76,.03));border:1px solid rgba(201,168,76,.38);color:var(--gb);font-family:'Cinzel',serif;font-size:.76rem;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:all .18s;}
-.btn-nq:hover{background:rgba(201,168,76,.14);transform:translateY(-1px);}
-.btn-back-map{padding:9px 20px;background:transparent;border:1px solid rgba(201,168,76,.22);color:var(--td);font-family:'Cinzel',serif;font-size:.7rem;letter-spacing:.1em;cursor:pointer;transition:all .18s;}
-.btn-back-map:hover{border-color:var(--gold);color:var(--text);}
+.btn-nq{padding:9px 22px;background:linear-gradient(135deg,rgba(201,168,76,.1),rgba(201,168,76,.03));border:1px solid rgba(201,168,76,.38);color:var(--gb);font-family:'Cinzel',serif;font-size:.76rem;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:all .25s cubic-bezier(.22,1,.36,1);position:relative;overflow:hidden;}
+.btn-nq::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(201,168,76,.06),transparent);background-size:200% 100%;animation:goldShimmer 5s ease infinite;pointer-events:none;}
+.btn-nq:hover{background:rgba(201,168,76,.16);transform:translateY(-2px);box-shadow:0 0 20px rgba(201,168,76,.15);}
+.btn-nq:active{transform:translateY(0);}
+.btn-back-map{padding:9px 20px;background:transparent;border:1px solid rgba(201,168,76,.22);color:var(--td);font-family:'Cinzel',serif;font-size:.7rem;letter-spacing:.1em;cursor:pointer;transition:all .25s;}
+.btn-back-map:hover{border-color:var(--gold);color:var(--text);box-shadow:0 0 15px rgba(201,168,76,.1);}
 
-.quiz-opt{display:flex;align-items:center;gap:9px;padding:10px 12px;background:rgba(255,255,255,.02);border:1px solid rgba(201,168,76,.12);color:var(--text);font-family:'EB Garamond',serif;font-size:.93rem;cursor:pointer;transition:all .18s;text-align:left;line-height:1.4;}
-.quiz-opt:hover{border-color:rgba(201,168,76,.38);background:rgba(201,168,76,.05);}
+.quiz-opt{display:flex;align-items:center;gap:9px;padding:10px 12px;background:rgba(255,255,255,.02);border:1px solid rgba(201,168,76,.12);color:var(--text);font-family:'EB Garamond',serif;font-size:.93rem;cursor:pointer;transition:all .25s cubic-bezier(.22,1,.36,1);text-align:left;line-height:1.4;}
+.quiz-opt:hover{border-color:rgba(201,168,76,.45);background:rgba(201,168,76,.06);transform:translateX(3px);box-shadow:0 0 15px rgba(201,168,76,.08);}
 .opt-l{width:20px;height:20px;border:1px solid rgba(201,168,76,.28);display:flex;align-items:center;justify-content:center;font-family:'Cinzel',serif;font-size:.62rem;color:var(--gm);flex-shrink:0;}
-.opt-ok{border-color:#66BB6A!important;background:rgba(102,187,106,.08)!important;color:#A5D6A7!important;}
+.opt-ok{border-color:#66BB6A!important;background:rgba(102,187,106,.1)!important;color:#A5D6A7!important;box-shadow:0 0 20px rgba(102,187,106,.12)!important;}
 .opt-ok .opt-l{border-color:#66BB6A;color:#66BB6A;}
-.opt-err{border-color:#E53935!important;background:rgba(229,57,53,.07)!important;color:#EF9A9A!important;}
+.opt-err{border-color:#E53935!important;background:rgba(229,57,53,.08)!important;color:#EF9A9A!important;box-shadow:0 0 20px rgba(229,57,53,.1)!important;}
 .opt-err .opt-l{border-color:#E53935;color:#E53935;}
 
 .tf-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:16px 10px;border:1px solid rgba(201,168,76,.18);background:rgba(255,255,255,.02);color:var(--text);font-family:'Cinzel',serif;font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:all .2s;}
@@ -4231,14 +4242,15 @@ body{background:var(--bg);}
 .prophecy-opt{display:flex;align-items:center;padding:12px 16px;background:rgba(122,74,187,.04);border:1px solid rgba(122,74,187,.18);color:var(--text);font-family:'EB Garamond',serif;font-size:.97rem;cursor:pointer;transition:all .2s;text-align:left;line-height:1.5;}
 .prophecy-opt:hover{border-color:rgba(122,74,187,.48);background:rgba(122,74,187,.09);transform:translateX(4px);}
 
-@keyframes avatarPulse{0%,100%{box-shadow:0 0 18px var(--rc,rgba(201,168,76,.27))}50%{box-shadow:0 0 30px var(--rc,rgba(201,168,76,.45)),0 0 60px var(--rc,rgba(201,168,76,.15))}}
+@keyframes avatarPulse{0%,100%{box-shadow:0 0 18px var(--rc,rgba(201,168,76,.27)),0 0 4px var(--rc,rgba(201,168,76,.1))}50%{box-shadow:0 0 35px var(--rc,rgba(201,168,76,.5)),0 0 70px var(--rc,rgba(201,168,76,.15)),0 0 4px var(--rc,rgba(201,168,76,.2))}}
 .avatar-glow{animation:avatarPulse 3s ease-in-out infinite;}
 .map-parchment{border-radius:3px;overflow:hidden;}
 @keyframes mapSparkle{0%,100%{opacity:.08}50%{opacity:.2}}
 @keyframes dragonGlow{0%,100%{opacity:.6}50%{opacity:1}}
 .map-sparkle{animation:mapSparkle 2.5s ease-in-out infinite;}
 button{transition:all .25s cubic-bezier(.22,1,.36,1);}
-.profile-subtab::after{content:'';position:absolute;bottom:0;left:10%;width:0;height:2px;background:var(--gold);transition:width .3s ease;}
+button:active{transform:scale(.97);}
+.profile-subtab::after{content:'';position:absolute;bottom:0;left:10%;width:0;height:2px;background:linear-gradient(90deg,transparent,var(--gold),transparent);transition:width .4s cubic-bezier(.22,1,.36,1);box-shadow:0 0 8px rgba(201,168,76,.3);}
 .profile-subtab[aria-selected="true"]::after{width:80%;}
 
 @media(prefers-reduced-motion:reduce){

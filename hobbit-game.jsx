@@ -12,7 +12,7 @@ const CSS=`
 @import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--gold:#C9A84C;--gold2:#FFD700;--bg:#050302;--border:rgba(201,168,76,.13);--text:#EDE8E0;--muted:rgba(237,232,224,.5);--dim:rgba(237,232,224,.25)}
-@keyframes gP{0%,100%{text-shadow:0 0 18px rgba(201,168,76,.5),0 0 36px rgba(201,168,76,.25)}50%{text-shadow:0 0 45px rgba(201,168,76,1),0 0 90px rgba(201,168,76,.6)}}
+@keyframes gP{0%,100%{text-shadow:0 0 18px rgba(201,168,76,.5),0 0 36px rgba(201,168,76,.2);filter:brightness(1)}50%{text-shadow:0 0 50px rgba(201,168,76,1),0 0 100px rgba(201,168,76,.5),0 0 150px rgba(201,168,76,.15);filter:brightness(1.1)}}
 @keyframes sU{from{transform:translateY(10px);opacity:0}to{transform:translateY(0);opacity:1}}
 @keyframes zI{from{transform:scale(.96);opacity:0}to{transform:scale(1);opacity:1}}
 @keyframes screenIn{from{opacity:0}to{opacity:1}}
