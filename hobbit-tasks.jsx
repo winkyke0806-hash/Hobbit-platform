@@ -1,11 +1,23 @@
-import { useState, useEffect, useRef, useCallback, Component } from "react";
+import React, { useState, useEffect, useRef, useCallback, Component, Suspense } from "react";
 import { auth } from "./hobbit-app.jsx";
 import { signOut } from "firebase/auth";
-import BoardGame from "./hobbit-game.jsx";
+const BoardGame = React.lazy(() => import("./hobbit-game.jsx"));
 import { sfx, isMuted, toggleMute, playMusic, stopMusic } from "./hobbit-sounds.jsx";
 
 class ErrorCatch extends Component{constructor(p){super(p);this.state={err:null};}static getDerivedStateFromError(e){return{err:e};}componentDidCatch(e,i){console.error("ProfileTab crash:",e,i);}render(){if(this.state.err)return <div style={{padding:20,color:"#EF9A9A",fontFamily:"monospace",fontSize:".8rem",whiteSpace:"pre-wrap"}}><b>Hiba a profilban:</b><br/>{this.state.err.toString()}<br/>{this.state.err.stack}</div>;return this.props.children;}}
 
+// ── UI HELPERS ────────────────────────────────────────────────────────────────
+function EmptyState({icon,title,subtitle}){
+  return <div style={{textAlign:"center",padding:"32px 20px",opacity:.6,animation:"fadeSlideIn .5s ease both"}}>
+    <div style={{fontSize:"2.5rem",marginBottom:10,animation:"emFl 3s ease-in-out infinite"}}>{icon}</div>
+    <div style={{fontFamily:"'Cinzel',serif",fontSize:".82rem",color:"var(--gm)",lineHeight:1.5}}>{title}</div>
+    {subtitle&&<div style={{fontFamily:"'EB Garamond',serif",fontSize:".78rem",color:"var(--td)",fontStyle:"italic",marginTop:6}}>{subtitle}</div>}
+  </div>;
+}
+function Toast({msg,isError}){
+  if(!msg)return null;
+  return <div style={{position:"fixed",top:16,left:"50%",transform:"translateX(-50%)",zIndex:9999,padding:"10px 20px",background:isError?"rgba(229,57,53,.95)":"rgba(102,187,106,.95)",color:"#fff",fontFamily:"'Cinzel',serif",fontSize:".7rem",borderRadius:8,boxShadow:`0 4px 24px ${isError?"rgba(229,57,53,.3)":"rgba(102,187,106,.3)"}`,animation:"fadeSlideIn .3s ease both",letterSpacing:".05em",maxWidth:"90vw",textAlign:"center"}}>{msg}</div>;
+}
 // ── CONSTANTS ──────────────────────────────────────────────────────────────────
 const RACES = [
   {id:"hobbit",icon:"🧑‍🌾",color:"#6B8C3E"},
@@ -2268,6 +2280,7 @@ const _getActiveSeason=(d=new Date())=>SEASONAL_EVENTS.find(s=>s.match(d))||null
 function LeaderboardPanel({leaderboard,myName}){
   const [mode,setMode]=useState("score"); // "score" or "elo"
   const sorted=mode==="elo"?[...leaderboard].sort((a,b)=>(b.elo||1000)-(a.elo||1000)):leaderboard;
+  if(!sorted.length)return <EmptyState icon="🏆" title="Még nincs ranglétra adat" subtitle="Teljesíts feladatokat, hogy felkerülj a listára!"/>;
   return <div role="list" aria-label="Ranglétra" style={{padding:"14px 12px",display:"flex",flexDirection:"column",gap:8}}>
     <div style={{fontFamily:"'Cinzel Decorative',serif",fontSize:".72rem",letterSpacing:".1em",color:"var(--gold)",textAlign:"center",marginBottom:2}}>Középfölde Ranglétrája</div>
     {/* Toggle */}
@@ -3024,13 +3037,10 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
     setMyVote(optId);
     localStorage.setItem("hobbit_vote_"+weekNum,optId);
     try{
-      const {getDatabase,ref:fbRef,set,get:fbGet}=window.__fbDB||{};
+      const {getDatabase,ref:fbRef,runTransaction}=window.__fbDB||{};
       if(!getDatabase)return;
       const db=getDatabase();
-      fbGet(fbRef(db,`votes/week_${weekNum}/${optId}`)).then(snap=>{
-        const cur=snap.val()||0;
-        set(fbRef(db,`votes/week_${weekNum}/${optId}`),cur+1);
-      });
+      runTransaction(fbRef(db,`votes/week_${weekNum}/${optId}`),(cur)=>(cur||0)+1);
     }catch(e){}
     sfx.success?.();
   };
@@ -3946,7 +3956,7 @@ function ProfileTab({user,completed,scores,onInviteFriend,onAddScore}){
 
 // ── BOARD GAME TAB ─────────────────────────────────────────────────────────────
 function BoardGameTab({user,onBack}){
-  return <BoardGame user={user} onBack={onBack}/>;
+  return <Suspense fallback={<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{fontFamily:"'Cinzel',serif",fontSize:".8rem",color:"var(--gm)",animation:"gP 2s ease infinite"}}>Társasjáték betöltése...</div></div>}><BoardGame user={user} onBack={onBack}/></Suspense>;
 }
 
 // ── MAIN APP ───────────────────────────────────────────────────────────────────
@@ -3959,6 +3969,9 @@ export default function HobbitApp(){
   const [activeTask,setActiveTask]=useState(null);
   const [tab,setTab]=useState("map");
   const [muted,setMuted]=useState(isMuted);
+  const [toastMsg,setToastMsg]=useState(null);
+  const [toastErr,setToastErr]=useState(false);
+  const showToast=(msg,isErr=false)=>{setToastMsg(msg);setToastErr(isErr);setTimeout(()=>setToastMsg(null),3500);};
   const [achievePopup,setAchievePopup]=useState(null);
   const [gameInvitePopup,setGameInvitePopup]=useState(null);
   const race=RACES.find(r=>r.id===user?.race)||RACES[3];
@@ -4023,7 +4036,16 @@ export default function HobbitApp(){
   const handleComplete=useCallback((taskId,score)=>{
     sfx.success();
     setCompleted(c=>{const next=c.includes(taskId)?c:[...c,taskId];const cu=JSON.parse(localStorage.getItem("hobbit_current")||"{}");cu.completedTasks=next;localStorage.setItem("hobbit_current",JSON.stringify(cu));return next;});
-    setScores(s=>{const next={...s,[taskId]:Math.max(s[taskId]||0,score)};localStorage.setItem("hobbit_task_scores",JSON.stringify(next));const cu=JSON.parse(localStorage.getItem("hobbit_current")||"{}");cu.score=Object.values(next).reduce((a,b)=>a+b,0);localStorage.setItem("hobbit_current",JSON.stringify(cu));return next;});
+    setScores(s=>{
+      const next={...s,[taskId]:Math.max(s[taskId]||0,score)};
+      localStorage.setItem("hobbit_task_scores",JSON.stringify(next));
+      const cu=JSON.parse(localStorage.getItem("hobbit_current")||"{}");
+      const total=Object.values(next).reduce((a,b)=>a+b,0);
+      cu.score=total;localStorage.setItem("hobbit_current",JSON.stringify(cu));
+      // Sync to Firebase
+      try{const {getDatabase,ref:fbRef,update}=window.__fbDB||{};if(getDatabase){const db=getDatabase();const name=cu.adventureName;if(name)update(fbRef(db,`users/${name}/profile`),{score:total,completedTasks:cu.completedTasks||[]});}}catch(e){console.warn("Score sync failed:",e);}
+      return next;
+    });
   },[]);
 
   // ── Achievement unlock detection ──
@@ -4083,6 +4105,7 @@ export default function HobbitApp(){
 
   return <>
     <style>{CSS}</style>
+    <Toast msg={toastMsg} isError={toastErr}/>
     <div className="root" onClick={globalClick}>
       <FloatingStones count={12}/>
       <div className="noise"/>
@@ -4105,7 +4128,7 @@ export default function HobbitApp(){
         {/* Content */}
         <ErrorCatch>
         <div style={{flex:1,display:"flex",flexDirection:"column",minHeight:0,overflow:"hidden"}}>
-          {tab==="map"    &&<div key="map" className="tab-content" style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}>{(()=>{const ss=_getActiveSeason();return ss?<button onClick={()=>{setTab("profile");}} style={{padding:"8px 16px",background:ss.bg,border:"none",borderBottom:`1px solid ${ss.border}`,display:"flex",alignItems:"center",justifyContent:"center",gap:10,cursor:"pointer",flexShrink:0,animation:"seasonBannerPulse 4s ease-in-out infinite"}}><span style={{fontSize:"1rem"}}>{ss.icon}</span><span style={{fontFamily:"'Cinzel',serif",fontSize:".62rem",color:ss.color,letterSpacing:".1em"}}>{ss.name} — Aktív!</span><span style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:"var(--gm)",letterSpacing:".06em"}}>Részletek ›</span></button>:null;})()}<AdventureMap user={user} completed={completed} scores={scores} onSelect={setActiveTask} onAddScore={(key,pts)=>{setScores(s=>{const next={...s,[key]:(s[key]||0)+pts};localStorage.setItem("hobbit_task_scores",JSON.stringify(next));const cu=JSON.parse(localStorage.getItem("hobbit_current")||"{}");cu.score=Object.values(next).reduce((a,b)=>a+b,0);localStorage.setItem("hobbit_current",JSON.stringify(cu));return next;});}}/></div>}
+          {tab==="map"    &&<div key="map" className="tab-content" style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}>{completed.length===0&&<div style={{padding:"10px 16px",background:"linear-gradient(90deg,rgba(201,168,76,.06),rgba(107,140,62,.04))",borderBottom:"1px solid rgba(201,168,76,.15)",display:"flex",alignItems:"center",justifyContent:"center",gap:8,flexShrink:0,animation:"fadeSlideIn .6s ease both"}}><span style={{fontSize:".9rem"}}>🧙</span><span style={{fontFamily:"'EB Garamond',serif",fontSize:".8rem",color:"var(--td)",fontStyle:"italic"}}>Kattints egy pontra a térképen az első kaland indításához!</span></div>}{(()=>{const ss=_getActiveSeason();return ss?<button onClick={()=>{setTab("profile");}} style={{padding:"8px 16px",background:ss.bg,border:"none",borderBottom:`1px solid ${ss.border}`,display:"flex",alignItems:"center",justifyContent:"center",gap:10,cursor:"pointer",flexShrink:0,animation:"seasonBannerPulse 4s ease-in-out infinite"}}><span style={{fontSize:"1rem"}}>{ss.icon}</span><span style={{fontFamily:"'Cinzel',serif",fontSize:".62rem",color:ss.color,letterSpacing:".1em"}}>{ss.name} — Aktív!</span><span style={{fontFamily:"'Cinzel',serif",fontSize:".5rem",color:"var(--gm)",letterSpacing:".06em"}}>Részletek ›</span></button>:null;})()}<AdventureMap user={user} completed={completed} scores={scores} onSelect={setActiveTask} onAddScore={(key,pts)=>{setScores(s=>{const next={...s,[key]:(s[key]||0)+pts};localStorage.setItem("hobbit_task_scores",JSON.stringify(next));const cu=JSON.parse(localStorage.getItem("hobbit_current")||"{}");cu.score=Object.values(next).reduce((a,b)=>a+b,0);localStorage.setItem("hobbit_current",JSON.stringify(cu));return next;});}}/></div>}
           {tab==="games"  &&<div key="games" className="tab-content" style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}><MiniGamesTab onAddScore={(key,pts)=>{setScores(s=>{const next={...s,[key]:(s[key]||0)+pts};localStorage.setItem("hobbit_task_scores",JSON.stringify(next));const cu=JSON.parse(localStorage.getItem("hobbit_current")||"{}");cu.score=Object.values(next).reduce((a,b)=>a+b,0);localStorage.setItem("hobbit_current",JSON.stringify(cu));return next;});}}/></div>}
           {tab==="profile"&&<div key="profile" className="tab-content" style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}><ProfileTab user={user} completed={completed} scores={scores} onInviteFriend={(friendName)=>{setTab("board");}} onAddScore={(key,pts)=>{setScores(s=>{const next={...s,[key]:(s[key]||0)+pts};localStorage.setItem("hobbit_task_scores",JSON.stringify(next));const cu=JSON.parse(localStorage.getItem("hobbit_current")||"{}");cu.score=Object.values(next).reduce((a,b)=>a+b,0);localStorage.setItem("hobbit_current",JSON.stringify(cu));return next;});}}/></div>}
           {tab==="board"  &&<div key="board" className="tab-content" style={{flex:1,display:"flex",flexDirection:"column",minHeight:0}}><BoardGameTab user={user} onBack={()=>setTab("map")}/></div>}
