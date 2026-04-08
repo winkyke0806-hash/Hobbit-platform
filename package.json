@@ -39,13 +39,10 @@
   "build": {
     "appId": "com.hobbit.platform",
     "productName": "A Hobbit Platform",
+    "forceCodeSigning": false,
     "win": {
-      "target": "nsis",
-      "icon": "public/icon.png"
-    },
-    "nsis": {
-      "oneClick": true,
-      "allowToChangeInstallationDirectory": false
+      "target": "portable",
+      "signAndEditExecutable": false
     },
     "files": [
       "dist/**/*",
