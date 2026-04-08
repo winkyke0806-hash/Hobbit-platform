@@ -4107,7 +4107,7 @@ export default function HobbitApp(){
     <style>{CSS}</style>
     <Toast msg={toastMsg} isError={toastErr}/>
     {/* Floating download button */}
-    <a href="https://github.com/winkyke0806-hash/Hobbit-platform/releases/latest" target="_blank" rel="noopener noreferrer" style={{position:"fixed",bottom:80,right:16,zIndex:9998,padding:"10px 16px",background:"linear-gradient(135deg,rgba(201,168,76,.15),rgba(201,168,76,.06))",border:"1px solid rgba(201,168,76,.4)",borderRadius:30,color:"var(--gold)",fontFamily:"'Cinzel',serif",fontSize:".6rem",letterSpacing:".08em",textDecoration:"none",display:"flex",alignItems:"center",gap:8,boxShadow:"0 4px 20px rgba(0,0,0,.5),0 0 15px rgba(201,168,76,.1)",backdropFilter:"blur(10px)",animation:"glowPulse 4s ease-in-out infinite",cursor:"pointer",transition:"all .3s"}}>
+    <a href="https://github.com/winkyke0806-hash/Hobbit-platform/releases/download/v1.0.0/A.Hobbit.Platform.1.0.0.exe" download style={{position:"fixed",bottom:80,right:16,zIndex:9998,padding:"10px 16px",background:"linear-gradient(135deg,rgba(201,168,76,.15),rgba(201,168,76,.06))",border:"1px solid rgba(201,168,76,.4)",borderRadius:30,color:"var(--gold)",fontFamily:"'Cinzel',serif",fontSize:".6rem",letterSpacing:".08em",textDecoration:"none",display:"flex",alignItems:"center",gap:8,boxShadow:"0 4px 20px rgba(0,0,0,.5),0 0 15px rgba(201,168,76,.1)",backdropFilter:"blur(10px)",animation:"glowPulse 4s ease-in-out infinite",cursor:"pointer",transition:"all .3s"}}>
       <span style={{fontSize:"1rem"}}>💾</span>Letöltés (PC)
     </a>
     <div className="root" onClick={globalClick}>
