@@ -40,13 +40,20 @@
     "appId": "com.hobbit.platform",
     "productName": "A Hobbit Platform",
     "forceCodeSigning": false,
+    "asar": true,
     "win": {
       "target": "portable",
       "signAndEditExecutable": false
     },
     "files": [
       "dist/**/*",
-      "electron/**/*"
+      "electron/**/*",
+      "!node_modules/**/*",
+      "!src/**/*",
+      "!public/**/*",
+      "!__tests__/**/*",
+      "!*.jsx",
+      "!*.md"
     ],
     "directories": {
       "output": "release"
